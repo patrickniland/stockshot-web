@@ -1,4 +1,4 @@
-// StockShot — Scan In View (fixed look navigation + focus)
+// StockShot — Scan In View (fixed look stepper UX)
 
 import { useState, useRef, useEffect } from 'react'
 import useAppStore from '../store/useAppStore'
@@ -21,14 +21,16 @@ export default function ScanInView() {
   const currentIntakeLook = useAppStore(s => s.currentIntakeLook)
   const setCurrentIntakeLook = useAppStore(s => s.setCurrentIntakeLook)
   const bumpLook = useAppStore(s => s.bumpLook)
-  const getActiveShoot = useAppStore(s => s.getActiveShoot)
+  const savedShoots = useAppStore(s => s.savedShoots)
+  const activeShootId = useAppStore(s => s.activeShootId)
 
   const received = getReceived()
   const dispatched = getDispatched()
   const pending = getPending()
   const meaningful = pendingIsMeaningful()
-  const shoot = getActiveShoot()
-  const maxLook = shoot ? Math.max(...shoot.lookOrder, currentIntakeLook) : currentIntakeLook
+
+  const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
+  const totalLooks = shoot ? Math.max(...shoot.lookOrder, currentIntakeLook) : currentIntakeLook
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -44,6 +46,20 @@ export default function ScanInView() {
     scanIn(value)
     setShowCamera(false)
     setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  function goBack() {
+    if (currentIntakeLook > 1) setCurrentIntakeLook(currentIntakeLook - 1)
+  }
+
+  function goForward() {
+    if (currentIntakeLook < totalLooks) {
+      setCurrentIntakeLook(currentIntakeLook + 1)
+    }
+  }
+
+  function addNewLook() {
+    bumpLook()
   }
 
   const recentItems = [...received]
@@ -94,51 +110,62 @@ export default function ScanInView() {
       >
         <p style={{ fontSize: '17px', fontWeight: 600, color: '#111', textAlign: 'center', marginBottom: '16px' }}>Scan In</p>
 
-        {/* Look navigator - fixed to allow forward navigation */}
+        {/* Look stepper */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          {/* Back */}
           <button
-            onClick={(e) => { e.stopPropagation(); setCurrentIntakeLook(Math.max(1, currentIntakeLook - 1)) }}
+            onClick={e => { e.stopPropagation(); goBack() }}
             disabled={currentIntakeLook <= 1}
             style={{
-              background: '#F5F5F5', border: '1px solid #E0E0E0', borderRadius: '6px',
-              width: '32px', height: '32px', cursor: currentIntakeLook > 1 ? 'pointer' : 'default',
-              color: currentIntakeLook > 1 ? '#7B1FA2' : '#ccc', fontSize: '16px', fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #E0E0E0',
+              background: currentIntakeLook > 1 ? '#F5F5F5' : '#FAFAFA',
+              color: currentIntakeLook > 1 ? '#7B1FA2' : '#ccc',
+              fontSize: '18px', cursor: currentIntakeLook > 1 ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
             ‹
           </button>
 
-          <div style={{ background: '#7B1FA2', color: '#fff', padding: '6px 20px', borderRadius: '7px', fontSize: '13px', fontWeight: 600, minWidth: '80px', textAlign: 'center' }}>
-            Look {currentIntakeLook}
+          {/* Look indicator */}
+          <div style={{ flex: 1, textAlign: 'center', background: '#7B1FA2', color: '#fff', padding: '6px 12px', borderRadius: '7px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700 }}>Look {currentIntakeLook}</span>
+            <span style={{ fontSize: '11px', opacity: 0.7, marginLeft: '6px' }}>of {totalLooks}</span>
           </div>
 
-          {/* Forward button — goes to existing look or creates new */}
+          {/* Forward — only if more looks exist */}
           <button
-            onClick={(e) => {
-              e.stopPropagation()
-              if (currentIntakeLook < maxLook) {
-                setCurrentIntakeLook(currentIntakeLook + 1)
-              } else {
-                bumpLook()
-              }
-            }}
+            onClick={e => { e.stopPropagation(); goForward() }}
+            disabled={currentIntakeLook >= totalLooks}
             style={{
-              background: '#EDE9FE', border: 'none', borderRadius: '6px',
-              padding: '6px 12px', cursor: 'pointer', color: '#7B1FA2',
-              fontSize: '12px', fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: '4px',
+              width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #E0E0E0',
+              background: currentIntakeLook < totalLooks ? '#F5F5F5' : '#FAFAFA',
+              color: currentIntakeLook < totalLooks ? '#7B1FA2' : '#ccc',
+              fontSize: '18px', cursor: currentIntakeLook < totalLooks ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
-            {currentIntakeLook < maxLook ? '›' : '+ New Look'}
+            ›
+          </button>
+
+          {/* New look — always visible, separate */}
+          <button
+            onClick={e => { e.stopPropagation(); addNewLook() }}
+            style={{
+              background: '#EDE9FE', color: '#7B1FA2', border: 'none',
+              padding: '6px 12px', borderRadius: '7px', fontSize: '12px',
+              cursor: 'pointer', fontWeight: 600, flexShrink: 0,
+            }}>
+            + New Look
           </button>
         </div>
 
         {/* Mark as shot toggle */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', cursor: 'pointer' }} onClick={e => e.stopPropagation()}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', cursor: 'pointer' }}
+          onClick={e => e.stopPropagation()}>
           <input type="checkbox" checked={markShotOnScanIn} onChange={e => setMarkShotOnScanIn(e.target.checked)} />
           <span style={{ fontSize: '12px', color: markShotOnScanIn ? '#7B1FA2' : '#444', fontWeight: markShotOnScanIn ? 600 : 400 }}>
             📷 Mark as Shot on scan-in
           </span>
-          {markShotOnScanIn && <span style={{ fontSize: '11px', color: '#7B1FA2' }}>· Items marked Received + Shot</span>}
+          {markShotOnScanIn && <span style={{ fontSize: '11px', color: '#7B1FA2' }}>· Received + Shot</span>}
         </label>
 
         <hr style={{ border: 'none', borderTop: '1px solid #F0F0F0', marginBottom: '16px' }} />
@@ -158,7 +185,7 @@ export default function ScanInView() {
         />
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={(e) => { e.stopPropagation(); triggerScanIn() }} disabled={!scanInput.trim()} style={{
+          <button onClick={e => { e.stopPropagation(); triggerScanIn() }} disabled={!scanInput.trim()} style={{
             flex: 1, padding: '10px', fontSize: '14px', fontWeight: 600,
             background: !scanInput.trim() ? '#E0E0E0' : markShotOnScanIn ? '#7B1FA2' : '#2E7D32',
             color: !scanInput.trim() ? '#999' : '#fff',
@@ -166,13 +193,13 @@ export default function ScanInView() {
           }}>
             ✓ Mark Received
           </button>
-          <button onClick={(e) => { e.stopPropagation(); setShowCamera(true) }} style={{
+          <button onClick={e => { e.stopPropagation(); setShowCamera(true) }} style={{
             padding: '10px 16px', background: '#1565C0', border: 'none',
             borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#fff',
           }}>
             📷 Camera
           </button>
-          <button onClick={(e) => { e.stopPropagation(); setScanInput('') }} style={{
+          <button onClick={e => { e.stopPropagation(); setScanInput('') }} style={{
             padding: '10px 16px', background: '#F5F5F5', border: 'none',
             borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#444',
           }}>
@@ -213,20 +240,21 @@ export default function ScanInView() {
               {item.description && <div style={{ fontSize: '10px', color: '#888' }}>{item.description}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
+              <div style={{ display: 'flex', gap: '3px', justifyContent: 'flex-end', marginBottom: '2px' }}>
+                {item.looks.map(l => (
+                  <span key={l} style={{ fontSize: '9px', fontWeight: 700, background: '#EDE9FE', color: '#7B1FA2', padding: '1px 4px', borderRadius: '3px' }}>L{l}</span>
+                ))}
+              </div>
               <div style={{ fontSize: '11px', color: '#666' }}>
                 {item.receivedAt ? new Date(item.receivedAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }) : ''}
               </div>
-              {item.shotStatus === 'shot' && <div style={{ fontSize: '9px', color: '#7B1FA2', fontWeight: 600 }}>SHOT</div>}
             </div>
           </div>
         ))}
       </div>
 
       {showCamera && (
-        <CameraScanner
-          onScan={handleCameraScan}
-          onClose={() => setShowCamera(false)}
-        />
+        <CameraScanner onScan={handleCameraScan} onClose={() => setShowCamera(false)} />
       )}
     </div>
   )

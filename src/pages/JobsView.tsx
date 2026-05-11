@@ -67,6 +67,7 @@ export default function JobsView() {
 
           {shoots.map(shoot => {
             const isActive = shoot.id === activeShootId
+            const canSwitch = !isActive
             const showDrops = expandedDrops === shoot.id
             const itemCount = shoot.items.length
             const receivedCount = shoot.items.filter(i => i.status === 'received').length
@@ -75,13 +76,20 @@ export default function JobsView() {
             const shotCount = shoot.items.filter(i => i.shotStatus === 'shot').length
 
             return (
-              <div key={shoot.id} style={{
-                background: '#fff',
-                border: `${isActive ? 1.5 : 1}px solid ${isActive ? '#2E7D32' : '#E0E0E0'}`,
-                borderRadius: '10px',
-                marginBottom: '8px',
-                overflow: 'hidden',
-              }}>
+              <div key={shoot.id}
+                onClick={() => { if (!isActive) { switchToShoot(shoot); navigate('/stock') } }}
+                style={{
+                  background: '#fff',
+                  border: `${isActive ? 1.5 : 1}px solid ${isActive ? '#2E7D32' : '#E0E0E0'}`,
+                  borderRadius: '10px',
+                  marginBottom: '8px',
+                  overflow: 'hidden',
+                  cursor: isActive ? 'default' : 'pointer',
+                  transition: 'box-shadow 0.15s',
+                }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
+              >
                 <div style={{ display: 'flex', alignItems: 'flex-start', padding: '16px', gap: '12px' }}>
                   {/* Active indicator */}
                   <div style={{ width: '4px', alignSelf: 'stretch', background: isActive ? '#2E7D32' : '#E0E0E0', borderRadius: '2px', flexShrink: 0 }} />
