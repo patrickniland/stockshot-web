@@ -50,6 +50,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   }
 
   function moveItemToLook(item: StockItem, look: number) {
+    // Replace ALL existing looks with just this one
     onUpdateItem(item.id, [look])
   }
 
@@ -59,8 +60,15 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
     selectedIds.forEach(id => {
       const item = items.find(i => i.id === id)
       if (!item) return
-      if (bulkAction === 'add') addLookToItem(item, look)
-      else moveItemToLook(item, look)
+      if (bulkAction === 'add') {
+        // Add look without removing existing ones
+        if (!item.looks.includes(look)) {
+          onUpdateItem(item.id, [...item.looks, look].sort((a, b) => a - b))
+        }
+      } else {
+        // Move — replace all existing looks with just this one
+        onUpdateItem(item.id, [look])
+      }
     })
     setSelectedIds(new Set())
     setBulkLook('')
@@ -242,18 +250,35 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
                 <select
                   value=""
                   onChange={e => {
-                    if (e.target.value) addLookToItem(item, parseInt(e.target.value))
+                    const val = e.target.value
+                    if (!val) return
+                    if (val.startsWith('move-')) {
+                      moveItemToLook(item, parseInt(val.replace('move-', '')))
+                    } else {
+                      addLookToItem(item, parseInt(val))
+                    }
                     e.target.value = ''
                   }}
                   style={{
                     fontSize: '10px', padding: '2px 4px', border: '1px dashed #ccc',
                     borderRadius: '4px', color: '#888', background: '#fff', cursor: 'pointer',
-                    maxWidth: '70px',
+                    maxWidth: '80px',
                   }}>
                   <option value="">+ Look</option>
-                  {allLooks.filter(l => !item.looks.includes(l)).map(l => (
-                    <option key={l} value={l}>Look {l}</option>
-                  ))}
+                  {allLooks.filter(l => !item.looks.includes(l)).length > 0 && (
+                    <optgroup label="Add to">
+                      {allLooks.filter(l => !item.looks.includes(l)).map(l => (
+                        <option key={`add-${l}`} value={l}>Look {l}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {item.looks.length > 0 && allLooks.filter(l => !item.looks.includes(l)).length > 0 && (
+                    <optgroup label="Move to (replaces)">
+                      {allLooks.filter(l => !item.looks.includes(l)).map(l => (
+                        <option key={`move-${l}`} value={`move-${l}`}>Look {l}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
             </div>
