@@ -16,9 +16,13 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLook, setBulkLook] = useState<string>('')
+  const [filterLook, setFilterLook] = useState<string>('all')
   const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
 
-  const filtered = items.filter(i => {
+  const lookFiltered = filterLook === 'all' ? items : items.filter(i => 
+    filterLook === 'none' ? i.looks.length === 0 : i.looks.includes(parseInt(filterLook))
+  )
+  const filtered = lookFiltered.filter(i => {
     if (!search) return true
     const q = search.toLowerCase()
     return i.styleNumber.toLowerCase().includes(q) ||
@@ -127,20 +131,26 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           </button>
         </div>
 
-        {/* Look summary pills */}
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {allLooks.map(look => {
-            const count = items.filter(i => i.looks.includes(look)).length
-            return (
-              <div key={look} style={{
-                background: '#EDE9FE', color: '#7B1FA2',
-                fontSize: '11px', fontWeight: 600,
-                padding: '4px 10px', borderRadius: '99px',
-              }}>
-                Look {look} · {count} item{count !== 1 ? 's' : ''}
-              </div>
-            )
-          })}
+        {/* Look filter dropdown */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '12px', color: '#666', flexShrink: 0 }}>Filter by Look:</span>
+          <select
+            value={filterLook}
+            onChange={e => { setFilterLook(e.target.value); setSelectedIds(new Set()) }}
+            style={{ flex: 1, padding: '6px 10px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
+          >
+            <option value="all">All Looks ({items.length} items)</option>
+            <option value="none">No Look Assigned ({items.filter(i => i.looks.length === 0).length} items)</option>
+            {allLooks.map(look => {
+              const count = items.filter(i => i.looks.includes(look)).length
+              return <option key={look} value={String(look)}>Look {look} ({count} item{count !== 1 ? 's' : ''})</option>
+            })}
+          </select>
+          {filterLook !== 'all' && (
+            <button onClick={() => setFilterLook('all')} style={{
+              background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '18px', flexShrink: 0,
+            }}>✕</button>
+          )}
         </div>
 
         {/* Bulk action bar */}

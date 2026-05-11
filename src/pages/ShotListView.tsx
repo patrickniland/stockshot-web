@@ -68,10 +68,12 @@ export default function ShotListView() {
       ? item.completedAngles.filter(a => a !== angle)
       : [...item.completedAngles, angle]
     const allDone = item.requiredAngles.length > 0 && item.requiredAngles.every(a => completed.includes(a))
+    // If all angles done → Shot. If any angle removed → revert to Not Shot (unless manually overridden to N/A)
+    const newShotStatus = allDone ? 'shot' : item.shotStatus === 'notRequired' ? 'notRequired' : 'notShot'
     updateItem(itemId, {
       completedAngles: completed,
-      shotStatus: allDone ? 'shot' : item.shotStatus,
-      shotAt: allDone ? new Date().toISOString() : item.shotAt,
+      shotStatus: newShotStatus,
+      shotAt: allDone ? new Date().toISOString() : null,
     })
   }
 
