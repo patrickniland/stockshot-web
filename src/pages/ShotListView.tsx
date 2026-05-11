@@ -7,6 +7,7 @@ import { StockItem, ShotStatus } from '../types'
 import { exportShotListCSV } from '../lib/csvExport'
 import { exportShotListPDF, exportLabelGridPDF, LabelOptions } from '../lib/pdfExporter'
 import QRCode from '../components/QRCode'
+import LookBuilder from '../components/LookBuilder'
 
 export default function ShotListView() {
   const [search, setSearch] = useState('')
@@ -23,8 +24,10 @@ export default function ShotListView() {
     showQRValue: true,
   })
   const [exporting, setExporting] = useState(false)
+  const [showLookBuilder, setShowLookBuilder] = useState(false)
 
   const savedShoots = useAppStore(s => s.savedShoots)
+  const bumpLook = useAppStore(s => s.bumpLook)
   const activeShootId = useAppStore(s => s.activeShootId)
   const updateShootItems = useAppStore(s => s.updateShootItems)
   const clients = useAppStore(s => s.clients)
@@ -148,6 +151,7 @@ export default function ShotListView() {
         <button onClick={() => exportShotListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>CSV</button>
         <button onClick={() => exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>List PDF</button>
         <button onClick={() => setShowLabelModal(true)} style={{ padding: '6px 10px', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>🏷 Labels PDF</button>
+        <button onClick={() => setShowLookBuilder(true)} style={{ padding: '6px 10px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>👁 Look Builder</button>
       </div>
 
       {/* Items */}
@@ -179,6 +183,20 @@ export default function ShotListView() {
           </div>
         ))}
       </div>
+
+      {/* Look Builder panel */}
+      {showLookBuilder && shoot && (
+        <LookBuilder
+          items={allItems}
+          lookOrder={shoot.lookOrder}
+          onUpdateItem={(itemId, looks) => {
+            const updated = shoot.items.map(i => i.id === itemId ? { ...i, looks } : i)
+            updateShootItems(updated)
+          }}
+          onAddLook={() => bumpLook()}
+          onClose={() => setShowLookBuilder(false)}
+        />
+      )}
 
       {/* Label export modal */}
       {showLabelModal && (
@@ -336,7 +354,7 @@ function ShotRow({ item, index, expanded, productTypes, onToggle, onAngleToggle,
                   <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '4px' }}>Product type</label>
                   <select
                     value={item.productType ?? ''}
-                    onChange={e => onAssignProductType(e.target.value)}
+                    onChange={e => { e.stopPropagation(); onAssignProductType(e.target.value) }}
                     style={{ padding: '5px 8px', border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '12px', width: '100%' }}
                   >
                     <option value="">— not assigned —</option>
@@ -353,7 +371,7 @@ function ShotRow({ item, index, expanded, productTypes, onToggle, onAngleToggle,
                     {item.requiredAngles.map(angle => {
                       const done = item.completedAngles.includes(angle)
                       return (
-                        <button key={angle} onClick={() => onAngleToggle(angle)} style={{
+                        <button key={angle} onClick={(e) => { e.stopPropagation(); onAngleToggle(angle) }} style={{
                           padding: '5px 12px', borderRadius: '99px', fontSize: '12px',
                           fontWeight: 600, cursor: 'pointer', border: 'none',
                           background: done ? '#7B1FA2' : '#F0F0F0',
@@ -377,7 +395,7 @@ function ShotRow({ item, index, expanded, productTypes, onToggle, onAngleToggle,
               {/* Shot status override */}
               <div style={{ display: 'flex', gap: '6px' }}>
                 {(['notShot', 'shot', 'notRequired'] as const).map(s => (
-                  <button key={s} onClick={() => onShotStatusChange(s)} style={{
+                  <button key={s} onClick={(e) => { e.stopPropagation(); onShotStatusChange(s) }} style={{
                     padding: '5px 10px', borderRadius: '6px', fontSize: '11px',
                     fontWeight: 500, cursor: 'pointer',
                     border: item.shotStatus === s ? 'none' : '1px solid #E0E0E0',

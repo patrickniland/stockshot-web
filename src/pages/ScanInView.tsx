@@ -30,7 +30,8 @@ export default function ScanInView() {
   const meaningful = pendingIsMeaningful()
 
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
-  const totalLooks = shoot ? Math.max(...shoot.lookOrder, currentIntakeLook) : currentIntakeLook
+  const lookOrder = shoot?.lookOrder ?? [1]
+  const totalLooks = Math.max(...lookOrder, currentIntakeLook)
 
   useEffect(() => { inputRef.current?.focus() }, [])
 

@@ -178,7 +178,18 @@ const useAppStore = create<AppStore>()(
         ),
       })),
 
-      bumpLook: () => set(s => ({ currentIntakeLook: s.currentIntakeLook + 1 })),
+      bumpLook: () => set(s => {
+        const newLook = s.currentIntakeLook + 1
+        // Also add the new look number to the active shoot's lookOrder
+        const savedShoots = s.savedShoots.map(sh => {
+          if (sh.id !== s.activeShootId) return sh
+          const lookOrder = sh.lookOrder.includes(newLook)
+            ? sh.lookOrder
+            : [...sh.lookOrder, newLook].sort((a, b) => a - b)
+          return { ...sh, lookOrder, updatedAt: new Date().toISOString() }
+        })
+        return { currentIntakeLook: newLook, savedShoots }
+      }),
 
       // ── Item actions ─────────────────────────────────────
       updateItem: (itemId, updates) => {

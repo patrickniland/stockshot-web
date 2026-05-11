@@ -1,0 +1,270 @@
+// StockShot — Look Builder Panel
+// Slide-out panel from Shot List for managing item look assignments
+
+import { useState } from 'react'
+import { StockItem } from '../types'
+
+interface Props {
+  items: StockItem[]
+  lookOrder: number[]
+  onUpdateItem: (itemId: string, looks: number[]) => void
+  onAddLook: () => void
+  onClose: () => void
+}
+
+export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook, onClose }: Props) {
+  const [search, setSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkLook, setBulkLook] = useState<string>('')
+  const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
+
+  const filtered = items.filter(i => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return i.styleNumber.toLowerCase().includes(q) ||
+      i.description.toLowerCase().includes(q) ||
+      i.sku.toLowerCase().includes(q)
+  })
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filtered.map(i => i.id)))
+  }
+
+  function addLookToItem(item: StockItem, look: number) {
+    if (item.looks.includes(look)) return
+    onUpdateItem(item.id, [...item.looks, look].sort((a, b) => a - b))
+  }
+
+  function removeLookFromItem(item: StockItem, look: number) {
+    if (item.looks.length <= 1) return // keep at least one look
+    onUpdateItem(item.id, item.looks.filter(l => l !== look))
+  }
+
+  function moveItemToLook(item: StockItem, look: number) {
+    onUpdateItem(item.id, [look])
+  }
+
+  function applyBulkAction() {
+    if (!bulkLook) return
+    const look = parseInt(bulkLook)
+    selectedIds.forEach(id => {
+      const item = items.find(i => i.id === id)
+      if (!item) return
+      if (bulkAction === 'add') addLookToItem(item, look)
+      else moveItemToLook(item, look)
+    })
+    setSelectedIds(new Set())
+    setBulkLook('')
+  }
+
+  function handleAddNewLook() {
+    onAddLook()
+  }
+
+  const allLooks = [...new Set([...lookOrder, ...items.flatMap(i => i.looks)])].sort((a, b) => a - b)
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }}
+      />
+
+      {/* Panel */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: '420px', maxWidth: '95vw',
+        background: '#fff', zIndex: 201,
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+        animation: 'slideIn 0.2s ease',
+      }}>
+        <style>{`
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        `}</style>
+
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E0E0E0', background: '#1C1C1E', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Look Builder</div>
+            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+              {items.length} items · {allLooks.length} look{allLooks.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+          <button onClick={handleAddNewLook} style={{
+            background: '#EDE9FE', color: '#7B1FA2', border: 'none',
+            padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
+            cursor: 'pointer', fontWeight: 600,
+          }}>
+            + New Look
+          </button>
+          <button onClick={onClose} style={{
+            background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff',
+            padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer',
+          }}>
+            ✕
+          </button>
+        </div>
+
+        {/* Look summary pills */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {allLooks.map(look => {
+            const count = items.filter(i => i.looks.includes(look)).length
+            return (
+              <div key={look} style={{
+                background: '#EDE9FE', color: '#7B1FA2',
+                fontSize: '11px', fontWeight: 600,
+                padding: '4px 10px', borderRadius: '99px',
+              }}>
+                Look {look} · {count} item{count !== 1 ? 's' : ''}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div style={{ padding: '10px 20px', background: '#E3F2FD', borderBottom: '1px solid #BBDEFB', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1565C0' }}>
+              {selectedIds.size} selected
+            </span>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {(['add', 'move'] as const).map(a => (
+                <button key={a} onClick={() => setBulkAction(a)} style={{
+                  padding: '4px 10px', borderRadius: '5px', fontSize: '11px',
+                  fontWeight: 500, cursor: 'pointer', border: 'none',
+                  background: bulkAction === a ? '#1565C0' : '#fff',
+                  color: bulkAction === a ? '#fff' : '#444',
+                }}>
+                  {a === 'add' ? 'Add to' : 'Move to'}
+                </button>
+              ))}
+            </div>
+            <select value={bulkLook} onChange={e => setBulkLook(e.target.value)}
+              style={{ padding: '4px 8px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px', flex: 1 }}>
+              <option value="">Select look...</option>
+              {allLooks.map(l => <option key={l} value={l}>Look {l}</option>)}
+            </select>
+            <button onClick={applyBulkAction} disabled={!bulkLook} style={{
+              padding: '5px 12px', background: bulkLook ? '#1565C0' : '#E0E0E0',
+              color: bulkLook ? '#fff' : '#999', border: 'none',
+              borderRadius: '5px', fontSize: '12px', cursor: bulkLook ? 'pointer' : 'default',
+              fontWeight: 500,
+            }}>
+              Apply
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} style={{
+              background: 'none', border: 'none', fontSize: '12px', color: '#666', cursor: 'pointer',
+            }}>
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Search */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F5F5F5', borderRadius: '7px', padding: '7px 12px' }}>
+            <span style={{ fontSize: '12px', color: '#888' }}>🔍</span>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search items..."
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', flex: 1 }} />
+          </div>
+        </div>
+
+        {/* Column headers */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 20px', background: '#F9F9F9', borderBottom: '1px solid #F0F0F0', gap: '10px' }}>
+          <input type="checkbox"
+            checked={selectedIds.size === filtered.length && filtered.length > 0}
+            onChange={selectAll} />
+          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', flex: 1 }}>Item</span>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', width: '140px' }}>Looks</span>
+        </div>
+
+        {/* Item list */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtered.map((item, i) => (
+            <div key={item.id} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '10px 20px',
+              borderBottom: '1px solid #F5F5F5',
+              background: selectedIds.has(item.id) ? '#EEF6FF' : i % 2 === 0 ? '#fff' : '#FAFAFA',
+            }}>
+              <input type="checkbox" checked={selectedIds.has(item.id)}
+                onChange={() => toggleSelect(item.id)} style={{ flexShrink: 0 }} />
+
+              {/* Item info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.styleNumber}
+                </div>
+                <div style={{ fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.description || item.sku}
+                </div>
+              </div>
+
+              {/* Look pills + controls */}
+              <div style={{ width: '160px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                {item.looks.sort((a, b) => a - b).map(look => (
+                  <div key={look} style={{
+                    display: 'flex', alignItems: 'center', gap: '2px',
+                    background: '#EDE9FE', borderRadius: '4px',
+                    padding: '2px 4px 2px 7px',
+                  }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#7B1FA2' }}>L{look}</span>
+                    <button
+                      onClick={() => removeLookFromItem(item, look)}
+                      disabled={item.looks.length <= 1}
+                      title={item.looks.length <= 1 ? "Can't remove last look" : `Remove from Look ${look}`}
+                      style={{
+                        background: 'none', border: 'none', cursor: item.looks.length > 1 ? 'pointer' : 'default',
+                        color: item.looks.length > 1 ? '#7B1FA2' : '#ccc',
+                        fontSize: '11px', padding: '0 2px', lineHeight: 1,
+                      }}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add to look dropdown */}
+                <select
+                  value=""
+                  onChange={e => {
+                    if (e.target.value) addLookToItem(item, parseInt(e.target.value))
+                    e.target.value = ''
+                  }}
+                  style={{
+                    fontSize: '10px', padding: '2px 4px', border: '1px dashed #ccc',
+                    borderRadius: '4px', color: '#888', background: '#fff', cursor: 'pointer',
+                    maxWidth: '70px',
+                  }}>
+                  <option value="">+ Look</option>
+                  {allLooks.filter(l => !item.looks.includes(l)).map(l => (
+                    <option key={l} value={l}>Look {l}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #E0E0E0', background: '#F9F9F9', fontSize: '11px', color: '#888', textAlign: 'center' }}>
+          Tap ✕ on a look pill to remove · Use "+ Look" to add · Select multiple for bulk actions
+        </div>
+      </div>
+    </>
+  )
+}
