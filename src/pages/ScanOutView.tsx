@@ -1,4 +1,4 @@
-// StockShot — Scan Out View
+// StockShot — Scan Out View (fixed dispatch name focus)
 
 import { useState, useRef, useEffect } from 'react'
 import useAppStore from '../store/useAppStore'
@@ -9,7 +9,8 @@ export default function ScanOutView() {
   const [scanInput, setScanInput] = useState('')
   const [dispatchTo, setDispatchTo] = useState('')
   const [showCamera, setShowCamera] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const dispatchRef = useRef<HTMLInputElement>(null)
+  const scanRef = useRef<HTMLInputElement>(null)
 
   const scanOut = useAppStore(s => s.scanOut)
   const getReceived = useAppStore(s => s.getReceived)
@@ -21,7 +22,21 @@ export default function ScanOutView() {
   const dispatched = getDispatched()
   const pending = getPending()
 
-  useEffect(() => { inputRef.current?.focus() }, [])
+  // Focus dispatch field first if empty, otherwise scan field
+  useEffect(() => {
+    if (!dispatchTo.trim()) {
+      dispatchRef.current?.focus()
+    } else {
+      scanRef.current?.focus()
+    }
+  }, [])
+
+  // When dispatch name is filled in, move focus to scan field
+  function handleDispatchKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && dispatchTo.trim()) {
+      scanRef.current?.focus()
+    }
+  }
 
   function triggerScanOut() {
     const sku = scanInput.trim()
@@ -29,7 +44,7 @@ export default function ScanOutView() {
     if (!sku || !to) return
     scanOut(sku, to)
     setScanInput('')
-    setTimeout(() => inputRef.current?.focus(), 50)
+    setTimeout(() => scanRef.current?.focus(), 50)
   }
 
   function handleCameraScan(value: string) {
@@ -40,7 +55,7 @@ export default function ScanOutView() {
       setScanInput(value)
     }
     setShowCamera(false)
-    setTimeout(() => inputRef.current?.focus(), 50)
+    setTimeout(() => scanRef.current?.focus(), 50)
   }
 
   const recentDispatched = [...dispatched]
@@ -61,6 +76,7 @@ export default function ScanOutView() {
   return (
     <div style={{ padding: '1.5rem', maxWidth: '640px' }}>
 
+      {/* Status banner */}
       <div style={{ display: 'flex', background: '#fff', borderRadius: '10px', border: '1px solid #E0E0E0', marginBottom: '1rem', overflow: 'hidden' }}>
         <StatPill value={received.length} label="In Studio" color="#2E7D32" />
         <div style={{ width: '1px', background: '#E0E0E0' }} />
@@ -69,25 +85,29 @@ export default function ScanOutView() {
         <StatPill value={pending.length} label="Outstanding" color="#E65100" />
       </div>
 
-      <div
-        style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E0E0E0', padding: '1.5rem', marginBottom: '1rem' }}
-        onClick={() => inputRef.current?.focus()}
-      >
+      {/* Scan card */}
+      <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E0E0E0', padding: '1.5rem', marginBottom: '1rem' }}>
         <p style={{ fontSize: '17px', fontWeight: 600, color: '#111', textAlign: 'center', marginBottom: '16px' }}>Scan Out</p>
 
+        {/* Dispatch to — focused first */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
             Dispatch to (person / courier)
           </label>
           <input
+            ref={dispatchRef}
             value={dispatchTo}
             onChange={e => setDispatchTo(e.target.value)}
-            placeholder="Enter name before scanning…"
-            style={{ width: '100%', padding: '10px', border: '1px solid #E0E0E0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
+            onKeyDown={handleDispatchKeyDown}
+            placeholder="Enter name, then press Enter to scan…"
+            style={{ width: '100%', padding: '10px', border: `1px solid ${dispatchTo.trim() ? '#2E7D32' : '#E0E0E0'}`, borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
           />
+          {dispatchTo.trim() && (
+            <p style={{ fontSize: '11px', color: '#2E7D32', marginTop: '4px' }}>✓ Dispatching to {dispatchTo} — now scan items</p>
+          )}
         </div>
 
-        {dispatchTo.trim() === '' && (
+        {!dispatchTo.trim() && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', fontSize: '11px', color: '#E65100' }}>
             ⚠ Enter a dispatch recipient before scanning
           </div>
@@ -95,16 +115,20 @@ export default function ScanOutView() {
 
         <hr style={{ border: 'none', borderTop: '1px solid #F0F0F0', marginBottom: '16px' }} />
 
+        {/* SKU input */}
         <input
-          ref={inputRef}
+          ref={scanRef}
           value={scanInput}
           onChange={e => setScanInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && triggerScanOut()}
           placeholder="Scan or type SKU..."
+          disabled={!dispatchTo.trim()}
           style={{
             width: '100%', padding: '12px', fontSize: '18px', fontFamily: 'monospace',
             textAlign: 'center', border: '1px solid #E0E0E0', borderRadius: '8px',
             boxSizing: 'border-box', marginBottom: '12px', outline: 'none',
+            background: !dispatchTo.trim() ? '#F9F9F9' : '#fff',
+            color: !dispatchTo.trim() ? '#bbb' : '#111',
           }}
         />
 
@@ -118,8 +142,7 @@ export default function ScanOutView() {
               color: (!scanInput.trim() || !dispatchTo.trim()) ? '#999' : '#fff',
               border: 'none', borderRadius: '8px',
               cursor: (scanInput.trim() && dispatchTo.trim()) ? 'pointer' : 'default',
-            }}
-          >
+            }}>
             📦 Dispatch Item
           </button>
           <button onClick={() => setShowCamera(true)} style={{
@@ -137,6 +160,7 @@ export default function ScanOutView() {
         </div>
       </div>
 
+      {/* Feedback */}
       {lastScanFeedback && (
         <div style={{
           background: feedbackColor(lastScanFeedback), borderRadius: '10px',
@@ -151,6 +175,7 @@ export default function ScanOutView() {
         </div>
       )}
 
+      {/* Recent dispatches */}
       <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #E0E0E0', overflow: 'hidden' }}>
         <div style={{ padding: '10px 14px', background: '#F5F5F5', fontSize: '12px', fontWeight: 600, color: '#666' }}>
           Recent dispatches

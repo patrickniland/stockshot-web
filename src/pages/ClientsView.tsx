@@ -183,8 +183,8 @@ function ClientEditor({ client, onChange, onSave, onCancel }: {
                 Aliases for auto-mapping (comma separated, e.g. TOP, 01, T)
               </label>
               <input
-                value={pt.aliases.join(', ')}
-                onChange={e => updatePT(pt.id, { aliases: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                defaultValue={pt.aliases.join(', ')}
+                onBlur={e => updatePT(pt.id, { aliases: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
                 placeholder="TOP, 01, T"
                 style={{ ...input, width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
               />

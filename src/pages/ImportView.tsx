@@ -1,4 +1,4 @@
-// StockShot — Import View
+// StockShot — Import View (fixed)
 
 import { useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
@@ -14,6 +14,7 @@ export default function ImportView() {
   const [dropName, setDropName] = useState('')
   const [shootName, setShootName] = useState('')
   const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [importTarget, setImportTarget] = useState<'new' | 'existing'>('new')
   const [filename, setFilename] = useState('')
   const [warnings, setWarnings] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +24,7 @@ export default function ImportView() {
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { addShoot, getActiveShoot, addDropToActiveShoot, clients, getClient } = useAppStore()
+  const { addShoot, getActiveShoot, addDropToActiveShoot, clients, getClient, savedShoots } = useAppStore()
 
   async function handleFile(file: File) {
     setError(null); setLoading(true)
@@ -65,10 +66,14 @@ export default function ImportView() {
       itemCount: result.items.length,
     }
 
-    const activeShoot = getActiveShoot()
-
-    if (activeShoot) {
-      addDropToActiveShoot(drop, result.items)
+    if (importTarget === 'existing') {
+      const activeShoot = getActiveShoot()
+      if (activeShoot) {
+        addDropToActiveShoot(drop, result.items)
+      } else {
+        setError('No active shoot to add to. Please create a new shoot instead.')
+        return
+      }
     } else {
       const newShoot = {
         id: uuidv4(),
@@ -89,6 +94,7 @@ export default function ImportView() {
   }
 
   const dataRowCount = rows.length - (mapping.hasHeaderRow ? 1 : 0)
+  const activeShoot = getActiveShoot()
 
   const card: React.CSSProperties = {
     background: '#fff', border: '1px solid #E0E0E0',
@@ -153,27 +159,52 @@ export default function ImportView() {
             📄 {filename} — {dataRowCount} data rows detected
           </div>
 
-          {/* Shoot details */}
+          {/* Import target — NEW key addition */}
           <div style={card}>
-            <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', color: '#111' }}>Shoot details</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div>
-                <label style={label11}>Shoot name</label>
-                <input value={shootName} onChange={e => setShootName(e.target.value)}
-                  placeholder="e.g. Summer 2026" style={input} />
-              </div>
-              <div>
-                <label style={label11}>Drop / batch name</label>
-                <input value={dropName} onChange={e => setDropName(e.target.value)}
-                  placeholder="e.g. Drop 1" style={input} />
-              </div>
+            <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', color: '#111' }}>Import as</p>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+              <button onClick={() => setImportTarget('new')} style={{
+                flex: 1, padding: '10px', borderRadius: '8px', fontSize: '13px',
+                fontWeight: 500, cursor: 'pointer', border: 'none',
+                background: importTarget === 'new' ? '#1C1C1E' : '#F5F5F5',
+                color: importTarget === 'new' ? '#fff' : '#444',
+              }}>
+                🆕 New Shoot
+              </button>
+              <button
+                onClick={() => setImportTarget('existing')}
+                disabled={!activeShoot}
+                style={{
+                  flex: 1, padding: '10px', borderRadius: '8px', fontSize: '13px',
+                  fontWeight: 500, cursor: activeShoot ? 'pointer' : 'default', border: 'none',
+                  background: importTarget === 'existing' ? '#1565C0' : '#F5F5F5',
+                  color: importTarget === 'existing' ? '#fff' : activeShoot ? '#444' : '#ccc',
+                }}>
+                ➕ Add to "{activeShoot?.name ?? 'no active shoot'}"
+              </button>
             </div>
+
+            {importTarget === 'new' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={label11}>Shoot name</label>
+                  <input value={shootName} onChange={e => setShootName(e.target.value)}
+                    placeholder="e.g. Summer 2026" style={input} />
+                </div>
+                <div>
+                  <label style={label11}>Client (optional)</label>
+                  <select value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} style={{ ...input }}>
+                    <option value="">— no client —</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+
             <div>
-              <label style={label11}>Client (optional — loads shot template)</label>
-              <select value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} style={{ ...input }}>
-                <option value="">— no client selected —</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <label style={label11}>Drop / batch name</label>
+              <input value={dropName} onChange={e => setDropName(e.target.value)}
+                placeholder="e.g. Drop 1" style={input} />
             </div>
           </div>
 
@@ -234,7 +265,7 @@ export default function ImportView() {
             ))}
           </div>
 
-          {/* Preview table */}
+          {/* Preview */}
           {rows.length > 0 && (
             <div style={{ ...card, overflowX: 'auto' }}>
               <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', color: '#111' }}>Preview (first 5 rows)</p>

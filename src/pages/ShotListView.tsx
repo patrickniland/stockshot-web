@@ -1,9 +1,8 @@
-// StockShot — Shot List View
-// Includes per-angle tracking, look grouping, and export
+// StockShot — Shot List View (fixed immediate state updates)
 
 import { useState } from 'react'
 import useAppStore from '../store/useAppStore'
-import { StockItem } from '../types'
+import { StockItem, ShotStatus } from '../types'
 import { exportShotListCSV } from '../lib/csvExport'
 import { exportShotListPDF } from '../lib/pdfExporter'
 
@@ -13,15 +12,16 @@ export default function ShotListView() {
   const [groupByLook, setGroupByLook] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const getItems = useAppStore(s => s.getItems)
-  const toggleAngle = useAppStore(s => s.toggleAngle)
-  const updateItem = useAppStore(s => s.updateItem)
-  const getActiveShoot = useAppStore(s => s.getActiveShoot)
+  // Direct store access to avoid stale state
+  const savedShoots = useAppStore(s => s.savedShoots)
+  const activeShootId = useAppStore(s => s.activeShootId)
+  const updateShootItems = useAppStore(s => s.updateShootItems)
 
-  const shoot = getActiveShoot()
-  const allItems = getItems().filter(i => i.status === 'received' || i.status === 'dispatched' || i.shotStatus === 'shot')
+  const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
+  const allItems = shoot?.items ?? []
+  const visibleItems = allItems.filter(i => i.status === 'received' || i.status === 'dispatched' || i.shotStatus === 'shot')
 
-  const filtered = allItems.filter(i => {
+  const filtered = visibleItems.filter(i => {
     if (filter === 'notShot' && i.shotStatus !== 'notShot') return false
     if (filter === 'shot' && i.shotStatus !== 'shot') return false
     if (filter === 'partial') {
@@ -33,6 +33,27 @@ export default function ShotListView() {
     return i.styleNumber.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q)
   })
 
+  function updateItem(itemId: string, updates: Partial<StockItem>) {
+    if (!shoot) return
+    const updated = shoot.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
+    updateShootItems(updated)
+  }
+
+  function toggleAngle(itemId: string, angle: string) {
+    if (!shoot) return
+    const item = shoot.items.find(i => i.id === itemId)
+    if (!item) return
+    const completed = item.completedAngles.includes(angle)
+      ? item.completedAngles.filter(a => a !== angle)
+      : [...item.completedAngles, angle]
+    const allDone = item.requiredAngles.length > 0 && item.requiredAngles.every(a => completed.includes(a))
+    updateItem(itemId, {
+      completedAngles: completed,
+      shotStatus: allDone ? 'shot' : item.shotStatus,
+      shotAt: allDone ? new Date().toISOString() : item.shotAt,
+    })
+  }
+
   if (!shoot) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>
@@ -42,7 +63,7 @@ export default function ShotListView() {
     )
   }
 
-  const looks = shoot.lookOrder.filter(l => filtered.some(i => i.looks.includes(l)))
+  const looks = (shoot.lookOrder ?? [1]).filter(l => filtered.some(i => i.looks.includes(l)))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -51,13 +72,11 @@ export default function ShotListView() {
         <span style={{ fontSize: '16px', fontWeight: 700, color: '#111' }}>Shot List</span>
         <span style={{ fontSize: '13px', color: '#666' }}>({filtered.length} items)</span>
         <div style={{ flex: 1 }} />
-
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fff', border: '1px solid #E0E0E0', borderRadius: '7px', padding: '5px 10px' }}>
           <span style={{ fontSize: '12px', color: '#888' }}>🔍</span>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search..." style={{ border: 'none', outline: 'none', fontSize: '12px', width: '130px' }} />
         </div>
-
         <select value={filter} onChange={e => setFilter(e.target.value as any)}
           style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
           <option value="all">All</option>
@@ -65,12 +84,10 @@ export default function ShotListView() {
           <option value="partial">Partial</option>
           <option value="shot">Shot</option>
         </select>
-
         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#444', cursor: 'pointer' }}>
           <input type="checkbox" checked={groupByLook} onChange={e => setGroupByLook(e.target.checked)} />
           Group by Look
         </label>
-
         <button onClick={() => exportShotListCSV(filtered)} style={{ padding: '6px 12px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>CSV</button>
         <button onClick={() => exportShotListPDF(filtered)} style={{ padding: '6px 12px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>PDF</button>
       </div>
@@ -78,7 +95,7 @@ export default function ShotListView() {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {filtered.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#888', fontSize: '13px' }}>
-            No items match your filter.
+            No items match your filter. Items appear here once scanned in.
           </div>
         ) : groupByLook ? (
           looks.map(look => {
@@ -93,8 +110,8 @@ export default function ShotListView() {
                   <ShotRow key={item.id} item={item} index={i}
                     expanded={expandedId === item.id}
                     onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                    onAngleToggle={(angle) => toggleAngle(item.id, angle)}
-                    onShotStatusChange={(s) => updateItem(item.id, { shotStatus: s })} />
+                    onAngleToggle={angle => toggleAngle(item.id, angle)}
+                    onShotStatusChange={s => updateItem(item.id, { shotStatus: s })} />
                 ))}
               </div>
             )
@@ -104,8 +121,8 @@ export default function ShotListView() {
             <ShotRow key={item.id} item={item} index={i}
               expanded={expandedId === item.id}
               onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-              onAngleToggle={(angle) => toggleAngle(item.id, angle)}
-              onShotStatusChange={(s) => updateItem(item.id, { shotStatus: s })} />
+              onAngleToggle={angle => toggleAngle(item.id, angle)}
+              onShotStatusChange={s => updateItem(item.id, { shotStatus: s })} />
           ))
         )}
       </div>
@@ -119,52 +136,36 @@ function ShotRow({ item, index, expanded, onToggle, onAngleToggle, onShotStatusC
   expanded: boolean
   onToggle: () => void
   onAngleToggle: (angle: string) => void
-  onShotStatusChange: (s: any) => void
+  onShotStatusChange: (s: ShotStatus) => void
 }) {
   const hasAngles = item.requiredAngles.length > 0
-  const progress = hasAngles
-    ? `${item.completedAngles.length}/${item.requiredAngles.length}`
-    : null
-
-  const shotColor = item.shotStatus === 'shot' ? '#7B1FA2'
-    : item.shotStatus === 'notRequired' ? '#999' : '#E65100'
-  const shotBg = item.shotStatus === 'shot' ? '#EDE9FE'
-    : item.shotStatus === 'notRequired' ? '#F5F5F5' : '#FFF3E0'
+  const shotBg = item.shotStatus === 'shot' ? '#EDE9FE' : item.shotStatus === 'notRequired' ? '#F5F5F5' : '#FFF3E0'
+  const shotColor = item.shotStatus === 'shot' ? '#7B1FA2' : item.shotStatus === 'notRequired' ? '#999' : '#E65100'
 
   return (
     <div style={{ borderBottom: '1px solid #F0F0F0', background: index % 2 === 0 ? '#fff' : '#FAFAFA' }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer' }} onClick={onToggle}>
         <span style={{ width: '36px', fontSize: '11px', color: '#999', textAlign: 'center' }}>{index + 1}</span>
-
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '13px', fontWeight: 500, color: '#111' }}>{item.styleNumber}</div>
           <div style={{ fontSize: '10px', color: '#888' }}>{item.description || item.sku}</div>
         </div>
-
-        {/* Angle progress */}
         {hasAngles && (
           <div style={{ marginRight: '12px', fontSize: '11px', color: '#666' }}>
-            {progress} angles
+            {item.completedAngles.length}/{item.requiredAngles.length} angles
           </div>
         )}
-
-        {/* Shot status badge */}
-        <div style={{
-          fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '99px',
-          background: shotBg, color: shotColor, marginRight: '8px',
-        }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '99px', background: shotBg, color: shotColor, marginRight: '8px' }}>
           {item.shotStatus === 'shot' ? 'Shot' : item.shotStatus === 'notRequired' ? 'N/A' : 'Not Shot'}
         </div>
-
         <span style={{ fontSize: '12px', color: '#ccc' }}>{expanded ? '▲' : '▼'}</span>
       </div>
 
-      {/* Expanded angle pills */}
       {expanded && (
         <div style={{ padding: '12px 16px 16px 52px', background: '#FAFAFA', borderTop: '1px solid #F0F0F0' }}>
           {hasAngles ? (
             <div>
-              <p style={{ fontSize: '11px', color: '#888', marginBottom: '8px' }}>Required angles — tap to mark as done:</p>
+              <p style={{ fontSize: '11px', color: '#888', marginBottom: '8px' }}>Tap angles to mark as done:</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
                 {item.requiredAngles.map(angle => {
                   const done = item.completedAngles.includes(angle)
@@ -183,19 +184,18 @@ function ShotRow({ item, index, expanded, onToggle, onAngleToggle, onShotStatusC
               </div>
             </div>
           ) : (
-            <p style={{ fontSize: '11px', color: '#999', marginBottom: '12px' }}>No required angles defined for this item.</p>
+            <p style={{ fontSize: '11px', color: '#999', marginBottom: '12px' }}>No required angles defined.</p>
           )}
-
-          {/* Manual override */}
           <div style={{ display: 'flex', gap: '8px' }}>
             {(['notShot', 'shot', 'notRequired'] as const).map(s => (
               <button key={s} onClick={() => onShotStatusChange(s)} style={{
                 padding: '5px 12px', borderRadius: '6px', fontSize: '11px',
-                fontWeight: 500, cursor: 'pointer', border: '1px solid #E0E0E0',
+                fontWeight: 500, cursor: 'pointer',
+                border: item.shotStatus === s ? 'none' : '1px solid #E0E0E0',
                 background: item.shotStatus === s ? '#1C1C1E' : '#fff',
                 color: item.shotStatus === s ? '#fff' : '#444',
               }}>
-                {s === 'notShot' ? 'Not Shot' : s === 'shot' ? 'Shot' : 'N/A'}
+                {s === 'notShot' ? 'Not Shot' : s === 'shot' ? '✓ Shot' : 'N/A'}
               </button>
             ))}
           </div>
