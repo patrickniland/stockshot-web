@@ -61,14 +61,50 @@ interface AppStore {
   setLastScanFeedback: (val: ScanFeedback | null) => void
 }
 
-// Helper to find an item by SKU / style number / QR value
+// Normalise a scanned barcode value before matching
+// Handles two retail barcode formats:
+// Format 1 — with dashes e.g. "98-61332537-5" → returns middle part "61332537"
+// Format 2 — no dashes e.g. "98613325375" → drops first 2 and last 1 digit → "61332537"
+// Anything else passes through unchanged
+function normaliseScan(raw: string): string {
+  const trimmed = raw.trim()
+
+  // Format 1: dashes e.g. "98-61332537-5"
+  const parts = trimmed.split('-')
+  if (parts.length === 3 && parts.every(p => /^\d+$/.test(p))) {
+    return parts[1]
+  }
+
+  // Format 2: all digits, 4+ chars — strip first 2 and last 1
+  if (/^\d+$/.test(trimmed) && trimmed.length >= 4) {
+    return trimmed.slice(2, -1)
+  }
+
+  // Pass through unchanged
+  return trimmed
+}
+
+// Find an item by matching normalised scan value against multiple fields
+// Order: sku → qrCodeValue → styleNumber → extraFields
 function findItem(items: StockItem[], query: string): StockItem | undefined {
-  const q = query.trim().toLowerCase()
-  return items.find(i =>
-    i.sku.toLowerCase() === q ||
-    i.styleNumber.toLowerCase() === q ||
-    i.qrCodeValue.toLowerCase() === q
-  )
+  const raw = query.trim()
+  const normalised = normaliseScan(raw).toLowerCase()
+  const rawLower = raw.toLowerCase()
+
+  // Try both raw and normalised against each field
+  return items.find(i => {
+    const sku = i.sku.toLowerCase()
+    const qr = i.qrCodeValue.toLowerCase()
+    const style = i.styleNumber.toLowerCase()
+    const extraValues = Object.values(i.extraFields).map(v => v.toLowerCase())
+
+    return (
+      sku === rawLower || sku === normalised ||
+      qr === rawLower || qr === normalised ||
+      style === rawLower || style === normalised ||
+      extraValues.some(v => v === rawLower || v === normalised)
+    )
+  })
 }
 
 function feedback(type: FeedbackType, message: string, scannedValue: string): ScanFeedback {
@@ -82,7 +118,7 @@ const useAppStore = create<AppStore>()(
       savedShoots: [],
       activeShootId: null,
       lastScanFeedback: null,
-      currentIntakeLook: 1,
+      currentIntakeLook: 0,  // 0 = no look assigned
       markShotOnScanIn: false,
 
       // ── Derived ─────────────────────────────────────────
@@ -261,8 +297,10 @@ const useAppStore = create<AppStore>()(
         const now = new Date().toISOString()
         const updated = items.map(i => {
           if (i.id !== item.id) return i
-          const looks = i.looks.includes(currentIntakeLook)
-            ? i.looks : [...i.looks, currentIntakeLook]
+          // Only assign look if a specific look is active (look > 0)
+          const looks = currentIntakeLook > 0
+            ? (i.looks.includes(currentIntakeLook) ? i.looks : [...i.looks, currentIntakeLook])
+            : i.looks
           return {
             ...i,
             status: 'received' as ItemStatus,
