@@ -2,6 +2,7 @@
 
 import { NavLink } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
+import { Session } from '@supabase/supabase-js'
 
 const NAV = [
   { to: '/import',    icon: '⬇', label: 'Import Stock' },
@@ -15,7 +16,11 @@ const NAV = [
   { to: '/clients',   icon: '🏢', label: 'Clients' },
 ]
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children, session, onSignOut }: { 
+  children: React.ReactNode
+  session?: Session | null
+  onSignOut?: () => void
+}) {
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getNotShot = useAppStore(s => s.getNotShot)
   const getPending = useAppStore(s => s.getPending)
@@ -104,6 +109,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )
           })}
         </nav>
+
+        {/* User strip */}
+        {session && (
+          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {session.user.user_metadata?.avatar_url && (
+              <img src={session.user.user_metadata.avatar_url} style={{ width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0 }} alt="" />
+            )}
+            <span style={{ fontSize: '10px', color: '#666', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {session.user.user_metadata?.full_name || session.user.email}
+            </span>
+            <button onClick={onSignOut} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}
+              title="Sign out">
+              ↪
+            </button>
+          </div>
+        )}
 
         {/* Active shoot strip */}
         {activeShoot && (

@@ -117,6 +117,9 @@ const useAppStore = create<AppStore>()(
       clients: [],
       savedShoots: [],
       activeShootId: null,
+      orgId: null,
+      deletedShootIds: [],
+      deletedClientIds: [],
       lastScanFeedback: null,
       currentIntakeLook: 0,  // 0 = no look assigned
       markShotOnScanIn: false,
@@ -158,7 +161,8 @@ const useAppStore = create<AppStore>()(
       })),
 
       deleteClient: (clientId) => set(s => ({
-        clients: s.clients.filter(c => c.id !== clientId)
+        clients: s.clients.filter(c => c.id !== clientId),
+        deletedClientIds: [...s.deletedClientIds, clientId],
       })),
 
       // ── Shoot actions ────────────────────────────────────
@@ -174,6 +178,7 @@ const useAppStore = create<AppStore>()(
         return {
           savedShoots: remaining,
           activeShootId: remaining.length > 0 ? remaining[0].id : null,
+          deletedShootIds: [...s.deletedShootIds, shoot.id],
         }
       }),
 
@@ -364,6 +369,7 @@ const useAppStore = create<AppStore>()(
         savedShoots: s.savedShoots,
         activeShootId: s.activeShootId,
         markShotOnScanIn: s.markShotOnScanIn,
+        orgId: s.orgId,
       }),
     }
   )
