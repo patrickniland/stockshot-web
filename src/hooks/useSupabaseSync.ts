@@ -1,14 +1,13 @@
 // StockShot — Supabase Real-time Sync Hook
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchShoots, fetchClients, upsertShoot, upsertClient, deleteShoot, deleteClientFromDB } from '../lib/db'
 import useAppStore from '../store/useAppStore'
 
 export function useSupabaseSync(orgId: string | null) {
+  const [loaded, setLoaded] = useState(false)
   const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isInitialLoad = useRef(true)
-  const isSyncing = useRef(false)
 
   const setShoots = useAppStore(s => s.setShoots)
   const setClients = useAppStore(s => s.setClients)
@@ -19,10 +18,9 @@ export function useSupabaseSync(orgId: string | null) {
   const deletedShootIds = useAppStore(s => s.deletedShootIds)
   const deletedClientIds = useAppStore(s => s.deletedClientIds)
 
-  // Initial load — fetch all data from Supabase
+  // Initial load
   useEffect(() => {
     if (!orgId) return
-
     async function loadData() {
       try {
         const [shoots, cls] = await Promise.all([
@@ -34,42 +32,40 @@ export function useSupabaseSync(orgId: string | null) {
         if (!activeShootId && shoots.length > 0) {
           setActiveShootId(shoots[0].id)
         }
-        // Mark initial load done after a short delay
-        // to prevent the load from triggering a re-save
-        setTimeout(() => { isInitialLoad.current = false }, 2000)
       } catch (e) {
         console.error('Failed to load from Supabase:', e)
-        isInitialLoad.current = false
+      } finally {
+        setLoaded(true)
       }
     }
     loadData()
   }, [orgId])
 
-  // Sync shoots to Supabase when they change (debounced 1.5s)
+  // Sync shoots to Supabase when they change
+  // Only runs after initial load is complete
   useEffect(() => {
-    if (!orgId || isInitialLoad.current || isSyncing.current) return
+    if (!orgId || !loaded) return
     if (syncTimeout.current) clearTimeout(syncTimeout.current)
 
     syncTimeout.current = setTimeout(async () => {
-      isSyncing.current = true
       try {
+        console.log('[Sync] Saving', savedShoots.length, 'shoots to Supabase...')
         await Promise.all(savedShoots.map(s => upsertShoot(s, orgId!)))
+        console.log('[Sync] Shoots saved ✓')
         if (deletedShootIds?.length) {
           await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
         }
       } catch (e) {
-        console.error('Shoot sync error:', e)
-      } finally {
-        isSyncing.current = false
+        console.error('[Sync] Shoot sync error:', e)
       }
-    }, 1500)
+    }, 1000)
 
     return () => { if (syncTimeout.current) clearTimeout(syncTimeout.current) }
-  }, [savedShoots, deletedShootIds, orgId])
+  }, [savedShoots, deletedShootIds, orgId, loaded])
 
   // Sync clients
   useEffect(() => {
-    if (!orgId || isInitialLoad.current) return
+    if (!orgId || !loaded) return
     async function syncClients() {
       try {
         await Promise.all(clients.map(c => upsertClient(c, orgId!)))
@@ -77,13 +73,13 @@ export function useSupabaseSync(orgId: string | null) {
           await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
         }
       } catch (e) {
-        console.error('Client sync error:', e)
+        console.error('[Sync] Client sync error:', e)
       }
     }
     syncClients()
-  }, [clients, deletedClientIds, orgId])
+  }, [clients, deletedClientIds, orgId, loaded])
 
-  // Real-time subscriptions — listen for changes from other devices
+  // Real-time subscriptions
   useEffect(() => {
     if (!orgId) return
 
@@ -94,18 +90,18 @@ export function useSupabaseSync(orgId: string | null) {
         schema: 'public',
         table: 'shoots',
         filter: `org_id=eq.${orgId}`,
-      }, async (payload) => {
-        // Another device made a change — reload shoots
-        // Skip if we triggered this ourselves
-        if (isSyncing.current) return
+      }, async () => {
         try {
+          console.log('[Realtime] Shoots changed — reloading...')
           const shoots = await fetchShoots(orgId!)
           setShoots(shoots)
         } catch (e) {
-          console.error('Real-time shoots sync error:', e)
+          console.error('[Realtime] Error:', e)
         }
       })
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[Realtime] Shoots channel status:', status)
+      })
 
     const clientsCh = supabase
       .channel(`clients-${orgId}`)
@@ -115,11 +111,10 @@ export function useSupabaseSync(orgId: string | null) {
         table: 'clients',
         filter: `org_id=eq.${orgId}`,
       }, async () => {
-        if (isSyncing.current) return
         try {
           setClients(await fetchClients(orgId!))
         } catch (e) {
-          console.error('Real-time clients sync error:', e)
+          console.error('[Realtime] Clients error:', e)
         }
       })
       .subscribe()
