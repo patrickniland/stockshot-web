@@ -264,47 +264,6 @@ function StatChip({ value, label, color }: { value: string | number; label: stri
     <div style={{ textAlign: 'center' }}>
       <div style={{ fontSize: '13px', fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: '9px', color: '#888' }}>{label}</div>
-
-      {/* Trash section */}
-      {trashedShoots.length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingLeft: '4px' }}>
-            <span style={{ fontSize: '14px' }}>🗑</span>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#B71C1C' }}>Recently Deleted</span>
-            <span style={{ fontSize: '11px', color: '#888' }}>· Auto-deleted after 30 days</span>
-          </div>
-          {trashedShoots.map(shoot => {
-            const daysLeft = Math.ceil((new Date(shoot.deletedAt!).getTime() + 30 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24))
-            return (
-              <div key={shoot.id} style={{
-                background: '#FFF5F5', border: '1px solid #FFCDD2',
-                borderRadius: '10px', padding: '14px 16px',
-                marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '12px',
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: '#444' }}>{shoot.name}</div>
-                  <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                    {shoot.items.length} items · Deleted {new Date(shoot.deletedAt!).toLocaleDateString('en-ZA')} · {daysLeft} day{daysLeft !== 1 ? 's' : ''} until permanent deletion
-                  </div>
-                </div>
-                <button onClick={() => restoreShoot(shoot)} style={{
-                  padding: '6px 14px', background: '#E8F5E9', color: '#2E7D32',
-                  border: '1px solid #A5D6A7', borderRadius: '6px', fontSize: '12px',
-                  cursor: 'pointer', fontWeight: 500,
-                }}>
-                  ↩ Restore
-                </button>
-                <button onClick={() => { if (confirm(`Permanently delete "${shoot.name}"?\n\nThis CANNOT be undone. All ${shoot.items.length} items will be lost forever.`)) permanentlyDeleteShoot(shoot) }} style={{
-                  padding: '6px 12px', background: '#fff', border: '1px solid #FFCDD2',
-                  borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#B71C1C',
-                }}>
-                  Delete Forever
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
