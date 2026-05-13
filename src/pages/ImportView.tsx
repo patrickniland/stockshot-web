@@ -100,16 +100,16 @@ export default function ImportView() {
       if (orgId) {
         upsertShootMeta(newShoot, orgId)
           .then(() => {
-            console.log('[Import] Shoot meta saved, saving', result.items.length, 'items...')
+            console.log('[Import] Shoot meta saved, now saving', result.items.length, 'items...')
             return upsertItems(result.items, newShootId, orgId)
           })
-          .then(() => console.log('[Import] Items saved ✓'))
+          .then(() => console.log('[Import] Items saved to Supabase ✓'))
           .catch(e => {
-            console.error('[Import] Error:', e)
-            console.error('[Import] Details:', JSON.stringify(e))
+            console.error('[Import] shoot/items save error:', e)
+            console.error('[Import] Error details:', JSON.stringify(e))
           })
       } else {
-        console.error('[Import] No orgId!')
+        console.error('[Import] No orgId available - cannot save to Supabase')
       }
     }
 
