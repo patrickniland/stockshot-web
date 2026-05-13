@@ -56,6 +56,10 @@ interface AppStore {
   scanOut: (sku: string, to: string) => void
 
   // ── Settings ─────────────────────────────────────────────
+  setShoots: (shoots: Shoot[]) => void
+  setClients: (clients: Client[]) => void
+  setActiveShootId: (id: string) => void
+  setOrgId: (id: string) => void
   setMarkShotOnScanIn: (val: boolean) => void
   setCurrentIntakeLook: (val: number) => void
   setLastScanFeedback: (val: ScanFeedback | null) => void
@@ -358,6 +362,10 @@ const useAppStore = create<AppStore>()(
       },
 
       // ── Settings ─────────────────────────────────────────
+      setShoots: (shoots) => set({ savedShoots: shoots }),
+      setClients: (clients) => set({ clients }),
+      setActiveShootId: (id) => set({ activeShootId: id }),
+      setOrgId: (id) => set({ orgId: id }),
       setMarkShotOnScanIn: (val) => set({ markShotOnScanIn: val }),
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
       setLastScanFeedback: (val) => set({ lastScanFeedback: val }),
