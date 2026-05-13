@@ -83,8 +83,9 @@ export function useSupabaseSync(orgId: string | null) {
   useEffect(() => {
     if (!orgId) return
 
+    const deviceId = Math.random().toString(36).slice(2, 8)
     const shootsCh = supabase
-      .channel(`shoots-${orgId}`)
+      .channel(`shoots-${orgId}-${deviceId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -104,7 +105,7 @@ export function useSupabaseSync(orgId: string | null) {
       })
 
     const clientsCh = supabase
-      .channel(`clients-${orgId}`)
+      .channel(`clients-${orgId}-${deviceId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
