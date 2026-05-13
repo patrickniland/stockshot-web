@@ -1,4 +1,5 @@
-// StockShot — Supabase Real-time Sync Hook
+// StockShot — Supabase Sync Hook
+// Uses polling every 5 seconds as reliable cross-device sync
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -8,6 +9,8 @@ import useAppStore from '../store/useAppStore'
 export function useSupabaseSync(orgId: string | null) {
   const [loaded, setLoaded] = useState(false)
   const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastSyncedAt = useRef<string>('')
 
   const setShoots = useAppStore(s => s.setShoots)
   const setClients = useAppStore(s => s.setClients)
@@ -32,8 +35,9 @@ export function useSupabaseSync(orgId: string | null) {
         if (!activeShootId && shoots.length > 0) {
           setActiveShootId(shoots[0].id)
         }
+        lastSyncedAt.current = new Date().toISOString()
       } catch (e) {
-        console.error('Failed to load from Supabase:', e)
+        console.error('[Sync] Initial load failed:', e)
       } finally {
         setLoaded(true)
       }
@@ -41,24 +45,22 @@ export function useSupabaseSync(orgId: string | null) {
     loadData()
   }, [orgId])
 
-  // Sync shoots to Supabase when they change
-  // Only runs after initial load is complete
+  // Save to Supabase when local data changes (debounced)
   useEffect(() => {
     if (!orgId || !loaded) return
     if (syncTimeout.current) clearTimeout(syncTimeout.current)
 
     syncTimeout.current = setTimeout(async () => {
       try {
-        console.log('[Sync] Saving', savedShoots.length, 'shoots to Supabase...')
         await Promise.all(savedShoots.map(s => upsertShoot(s, orgId!)))
-        console.log('[Sync] Shoots saved ✓')
         if (deletedShootIds?.length) {
           await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
         }
+        lastSyncedAt.current = new Date().toISOString()
       } catch (e) {
-        console.error('[Sync] Shoot sync error:', e)
+        console.error('[Sync] Save error:', e)
       }
-    }, 1000)
+    }, 1500)
 
     return () => { if (syncTimeout.current) clearTimeout(syncTimeout.current) }
   }, [savedShoots, deletedShootIds, orgId, loaded])
@@ -73,56 +75,39 @@ export function useSupabaseSync(orgId: string | null) {
           await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
         }
       } catch (e) {
-        console.error('[Sync] Client sync error:', e)
+        console.error('[Sync] Client save error:', e)
       }
     }
     syncClients()
   }, [clients, deletedClientIds, orgId, loaded])
 
-  // Real-time subscriptions
+  // Poll every 5 seconds for changes from other devices
   useEffect(() => {
-    if (!orgId) return
+    if (!orgId || !loaded) return
 
-    const deviceId = Math.random().toString(36).slice(2, 8)
-    const shootsCh = supabase
-      .channel(`shoots-${orgId}-${deviceId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'shoots',
-        filter: `org_id=eq.${orgId}`,
-      }, async () => {
-        try {
-          console.log('[Realtime] Shoots changed — reloading...')
+    pollInterval.current = setInterval(async () => {
+      try {
+        // Check if any shoots were updated more recently than our last sync
+        const { data } = await supabase
+          .from('shoots')
+          .select('updated_at')
+          .eq('org_id', orgId)
+          .gt('updated_at', lastSyncedAt.current)
+          .limit(1)
+
+        if (data && data.length > 0) {
+          // Someone else made changes — reload
           const shoots = await fetchShoots(orgId!)
           setShoots(shoots)
-        } catch (e) {
-          console.error('[Realtime] Error:', e)
+          lastSyncedAt.current = new Date().toISOString()
         }
-      })
-      .subscribe((status) => {
-        console.log('[Realtime] Shoots channel status:', status)
-      })
-
-    const clientsCh = supabase
-      .channel(`clients-${orgId}-${deviceId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'clients',
-        filter: `org_id=eq.${orgId}`,
-      }, async () => {
-        try {
-          setClients(await fetchClients(orgId!))
-        } catch (e) {
-          console.error('[Realtime] Clients error:', e)
-        }
-      })
-      .subscribe()
+      } catch (e) {
+        // Silent fail on poll errors
+      }
+    }, 5000)
 
     return () => {
-      supabase.removeChannel(shootsCh)
-      supabase.removeChannel(clientsCh)
+      if (pollInterval.current) clearInterval(pollInterval.current)
     }
-  }, [orgId])
+  }, [orgId, loaded])
 }
