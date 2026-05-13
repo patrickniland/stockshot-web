@@ -169,11 +169,13 @@ export async function exportLabelGridPDF(
 
   const pageW = isNarrow ? 297 : 210
   const pageH = isNarrow ? 210 : 297
-  const margin = 10
+  const margin = 8
   const cols = options.perRow === 4 ? 4 : 8
   const labelW = (pageW - margin * 2) / cols
-  const labelH = isNarrow ? 60 : 70
-  const qrSize = isNarrow ? 20 : 28
+  const labelH = isNarrow ? 36 : 50
+  const qrSize = isNarrow ? 22 : 28
+  const maxTextW = labelW - qrSize - 6
+  const fontSize = isNarrow ? 5.5 : 6.5
 
   // Group items
   const groups: Array<{ name: string; items: StockItem[] }> = []
@@ -254,37 +256,48 @@ export async function exportLabelGridPDF(
         doc.addImage(qrData, 'PNG', x + 2, y + 2, qrSize, qrSize)
       }
 
-      // Text fields
-      const tx = x + qrSize + 4
-      const availW = labelW - qrSize - 6
-      let ty = y + 7
+      // Text fields — truncated to single lines, no wrapping
+      const tx = x + qrSize + 3
+      let ty = y + 6
+      const maxChars = isNarrow ? 10 : 14
 
-      doc.setFontSize(isNarrow ? 6 : 7)
+      doc.setFontSize(fontSize)
 
       if (options.showStyleNumber) {
         doc.setFont('helvetica', 'bold')
-        doc.text(item.styleNumber.slice(0, 18), tx, ty, { maxWidth: availW })
-        ty += isNarrow ? 5 : 6
+        const sn = item.styleNumber.length > maxChars + 2
+          ? item.styleNumber.slice(0, maxChars + 2)
+          : item.styleNumber
+        doc.text(sn, tx, ty)
+        ty += isNarrow ? 4.5 : 5.5
         doc.setFont('helvetica', 'normal')
       }
 
       if (options.showDescription && item.description) {
-        doc.text(item.description.slice(0, 22), tx, ty, { maxWidth: availW })
+        const desc = item.description.length > maxChars
+          ? item.description.slice(0, maxChars) + '…'
+          : item.description
+        doc.text(desc, tx, ty)
         ty += isNarrow ? 4 : 5
       }
 
       if (options.showLookNumber) {
         doc.setTextColor(123, 31, 162)
-        doc.text(`Look ${item.looks.join(', ')}`, tx, ty)
+        const lookStr = `L${item.looks.join(',')}`
+        doc.text(lookStr, tx, ty)
         doc.setTextColor(0, 0, 0)
         ty += isNarrow ? 4 : 5
       }
 
       if (options.showQRValue) {
-        doc.setFontSize(isNarrow ? 5 : 6)
-        doc.setTextColor(130, 130, 130)
-        doc.text(item.qrCodeValue.slice(0, 20), tx, ty, { maxWidth: availW })
+        doc.setFontSize(isNarrow ? 4.5 : 5.5)
+        doc.setTextColor(150, 150, 150)
+        const qrVal = item.qrCodeValue.length > maxChars + 2
+          ? item.qrCodeValue.slice(0, maxChars + 2)
+          : item.qrCodeValue
+        doc.text(qrVal, tx, ty)
         doc.setTextColor(0, 0, 0)
+        doc.setFontSize(fontSize)
       }
 
       currentCol++

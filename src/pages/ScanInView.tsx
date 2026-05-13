@@ -31,7 +31,7 @@ export default function ScanInView() {
 
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const lookOrder = shoot?.lookOrder ?? [1]
-  const totalLooks = Math.max(...lookOrder, currentIntakeLook)
+  const totalLooks = lookOrder.length > 0 ? Math.max(...lookOrder) : 0
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -50,7 +50,7 @@ export default function ScanInView() {
   }
 
   function goBack() {
-    if (currentIntakeLook > 1) setCurrentIntakeLook(currentIntakeLook - 1)
+    if (currentIntakeLook > 0) setCurrentIntakeLook(currentIntakeLook - 1)
   }
 
   function goForward() {
@@ -128,9 +128,14 @@ export default function ScanInView() {
           </button>
 
           {/* Look indicator */}
-          <div style={{ flex: 1, textAlign: 'center', background: '#7B1FA2', color: '#fff', padding: '6px 12px', borderRadius: '7px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700 }}>Look {currentIntakeLook}</span>
-            <span style={{ fontSize: '11px', opacity: 0.7, marginLeft: '6px' }}>of {totalLooks}</span>
+          <div style={{ flex: 1, textAlign: 'center', background: currentIntakeLook === 0 ? '#666' : '#7B1FA2', color: '#fff', padding: '6px 12px', borderRadius: '7px' }}>
+            {currentIntakeLook === 0
+              ? <span style={{ fontSize: '13px', fontWeight: 700 }}>No Look</span>
+              : <>
+                  <span style={{ fontSize: '13px', fontWeight: 700 }}>Look {currentIntakeLook}</span>
+                  <span style={{ fontSize: '11px', opacity: 0.7, marginLeft: '6px' }}>of {totalLooks}</span>
+                </>
+            }
           </div>
 
           {/* Forward — only if more looks exist */}
