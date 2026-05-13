@@ -39,6 +39,11 @@ interface AppStore {
   addShoot: (shoot: Shoot) => void
   switchToShoot: (shoot: Shoot) => void
   deleteShoot: (shoot: Shoot) => void
+  softDeleteShoot: (shoot: Shoot) => void
+  restoreShoot: (shoot: Shoot) => void
+  permanentlyDeleteShoot: (shoot: Shoot) => void
+  getTrashedShoots: () => Shoot[]
+  getActiveShoots: () => Shoot[]
   renameActiveShoot: (name: string) => void
   updateShootItems: (items: StockItem[]) => void
   addDropToActiveShoot: (drop: Drop, items: StockItem[]) => void
@@ -129,6 +134,17 @@ const useAppStore = create<AppStore>()(
       markShotOnScanIn: false,
 
       // ── Derived ─────────────────────────────────────────
+      getTrashedShoots: () => {
+        const { savedShoots } = get()
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        return savedShoots.filter(s => s.deletedAt !== null && s.deletedAt !== undefined && s.deletedAt > thirtyDaysAgo)
+      },
+
+      getActiveShoots: () => {
+        const { savedShoots } = get()
+        return savedShoots.filter(s => !s.deletedAt)
+      },
+
       getActiveShoot: () => {
         const { savedShoots, activeShootId } = get()
         return savedShoots.find(s => s.id === activeShootId) ?? null
@@ -171,11 +187,41 @@ const useAppStore = create<AppStore>()(
 
       // ── Shoot actions ────────────────────────────────────
       addShoot: (shoot) => set(s => ({
-        savedShoots: [...s.savedShoots, shoot],
+        savedShoots: [...s.savedShoots, { ...shoot, deletedAt: null }],
         activeShootId: shoot.id,
       })),
 
       switchToShoot: (shoot) => set({ activeShootId: shoot.id, currentIntakeLook: 1 }),
+
+      softDeleteShoot: (shoot) => set(s => {
+        const updated = s.savedShoots.map(sh =>
+          sh.id === shoot.id ? { ...sh, deletedAt: new Date().toISOString() } : sh
+        )
+        const remaining = updated.filter(sh => !sh.deletedAt)
+        return {
+          savedShoots: updated,
+          activeShootId: s.activeShootId === shoot.id
+            ? (remaining.length > 0 ? remaining[0].id : null)
+            : s.activeShootId,
+        }
+      }),
+
+      restoreShoot: (shoot) => set(s => ({
+        savedShoots: s.savedShoots.map(sh =>
+          sh.id === shoot.id ? { ...sh, deletedAt: null } : sh
+        ),
+      })),
+
+      permanentlyDeleteShoot: (shoot) => set(s => {
+        const remaining = s.savedShoots.filter(sh => sh.id !== shoot.id)
+        return {
+          savedShoots: remaining,
+          activeShootId: s.activeShootId === shoot.id
+            ? (remaining.filter(sh => !sh.deletedAt).length > 0 ? remaining.filter(sh => !sh.deletedAt)[0].id : null)
+            : s.activeShootId,
+          deletedShootIds: [...s.deletedShootIds, shoot.id],
+        }
+      }),
 
       deleteShoot: (shoot) => set(s => {
         const remaining = s.savedShoots.filter(x => x.id !== shoot.id)

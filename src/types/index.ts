@@ -87,6 +87,7 @@ export interface Shoot {
   items: StockItem[]
   drops: Drop[]
   lookOrder: number[]
+  deletedAt: string | null  // null = active, string = soft deleted
 }
 
 // Import result from file parsing
