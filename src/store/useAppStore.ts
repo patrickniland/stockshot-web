@@ -8,6 +8,7 @@ import {
   ScanFeedback, FeedbackType,
   ItemStatus, ShotStatus,
 } from '../types'
+import { updateItemStatus, upsertItems, deleteItemsByShoot } from '../lib/db'
 
 interface AppStore {
   // ── Data ────────────────────────────────────────────────
@@ -261,13 +262,19 @@ const useAppStore = create<AppStore>()(
         }),
       })),
 
-      clearActiveShoot: () => set(s => ({
-        savedShoots: s.savedShoots.map(sh =>
-          sh.id === s.activeShootId
-            ? { ...sh, items: [], drops: [], updatedAt: new Date().toISOString() }
-            : sh
-        ),
-      })),
+      clearActiveShoot: () => {
+        const { activeShootId, orgId } = get()
+        set(s => ({
+          savedShoots: s.savedShoots.map(sh =>
+            sh.id === s.activeShootId
+              ? { ...sh, items: [], drops: [], updatedAt: new Date().toISOString() }
+              : sh
+          ),
+        }))
+        if (activeShootId && orgId) {
+          deleteItemsByShoot(activeShootId).catch(e => console.error('[Sync] clear items error:', e))
+        }
+      },
 
       bumpLook: () => set(s => {
         const newLook = s.currentIntakeLook + 1
@@ -405,6 +412,17 @@ const useAppStore = create<AppStore>()(
 
         updateShootItems(updated)
         set({ lastScanFeedback: feedback('success', `Dispatched to ${to}`, sku) })
+
+        // Immediately sync dispatched item to Supabase
+        const updatedItem = updated.find(i => i.id === item.id)
+        const orgId = get().orgId
+        if (updatedItem && orgId) {
+          updateItemStatus(updatedItem.id, {
+            status: updatedItem.status,
+            dispatchedAt: updatedItem.dispatchedAt,
+            dispatchedTo: updatedItem.dispatchedTo,
+          }).catch(e => console.error('[Sync] scanOut item sync error:', e))
+        }
       },
 
       // ── Settings ─────────────────────────────────────────
