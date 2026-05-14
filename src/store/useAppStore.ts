@@ -1,5 +1,6 @@
 // StockShot — Global App State
-// Source of truth: Supabase. localStorage only persists session/prefs.
+// Scans and changes update LOCAL state only.
+// Use Push/Pull buttons to sync with Supabase.
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -8,7 +9,7 @@ import {
   ScanFeedback, FeedbackType,
   ItemStatus, ShotStatus,
 } from '../types'
-import { updateItemStatus, deleteItemsByShoot, upsertShootMeta } from '../lib/db'
+import { updateItemStatus } from '../lib/db'
 
 interface AppStore {
   clients: Client[]
@@ -148,51 +149,32 @@ const useAppStore = create<AppStore>()(
 
       switchToShoot: (shoot) => set({ activeShootId: shoot.id, currentIntakeLook: 0 }),
 
-      softDeleteShoot: (shoot) => {
-        const orgId = get().orgId
-        set(s => {
-          const updated = s.savedShoots.map(sh =>
-            sh.id === shoot.id ? { ...sh, deletedAt: new Date().toISOString() } : sh
-          )
-          const remaining = updated.filter(sh => !sh.deletedAt)
-          return {
-            savedShoots: updated,
-            activeShootId: s.activeShootId === shoot.id
-              ? (remaining[0]?.id ?? null) : s.activeShootId,
-          }
-        })
-        // Sync to Supabase
-        if (orgId) {
-          const updatedShoot = { ...shoot, deletedAt: new Date().toISOString() }
-          upsertShootMeta(updatedShoot, orgId).catch(e => console.error('[Sync] softDelete error:', e))
+      softDeleteShoot: (shoot) => set(s => {
+        const updated = s.savedShoots.map(sh =>
+          sh.id === shoot.id ? { ...sh, deletedAt: new Date().toISOString() } : sh
+        )
+        const remaining = updated.filter(sh => !sh.deletedAt)
+        return {
+          savedShoots: updated,
+          activeShootId: s.activeShootId === shoot.id ? (remaining[0]?.id ?? null) : s.activeShootId,
         }
-      },
+      }),
 
-      restoreShoot: (shoot) => {
-        const orgId = get().orgId
-        set(s => ({
-          savedShoots: s.savedShoots.map(sh =>
-            sh.id === shoot.id ? { ...sh, deletedAt: null } : sh
-          ),
-        }))
-        if (orgId) {
-          upsertShootMeta({ ...shoot, deletedAt: null }, orgId)
-            .catch(e => console.error('[Sync] restore error:', e))
+      restoreShoot: (shoot) => set(s => ({
+        savedShoots: s.savedShoots.map(sh =>
+          sh.id === shoot.id ? { ...sh, deletedAt: null } : sh
+        ),
+      })),
+
+      permanentlyDeleteShoot: (shoot) => set(s => {
+        const remaining = s.savedShoots.filter(sh => sh.id !== shoot.id)
+        return {
+          savedShoots: remaining,
+          activeShootId: s.activeShootId === shoot.id
+            ? (remaining.filter(sh => !sh.deletedAt)[0]?.id ?? null) : s.activeShootId,
+          deletedShootIds: [...s.deletedShootIds, shoot.id],
         }
-      },
-
-      permanentlyDeleteShoot: (shoot) => {
-        const orgId = get().orgId
-        set(s => {
-          const remaining = s.savedShoots.filter(sh => sh.id !== shoot.id)
-          return {
-            savedShoots: remaining,
-            activeShootId: s.activeShootId === shoot.id
-              ? (remaining.filter(sh => !sh.deletedAt)[0]?.id ?? null) : s.activeShootId,
-            deletedShootIds: [...s.deletedShootIds, shoot.id],
-          }
-        })
-      },
+      }),
 
       deleteShoot: (shoot) => set(s => {
         const remaining = s.savedShoots.filter(x => x.id !== shoot.id)
@@ -203,19 +185,12 @@ const useAppStore = create<AppStore>()(
         }
       }),
 
-      renameActiveShoot: (name) => {
-        const orgId = get().orgId
-        set(s => ({
-          savedShoots: s.savedShoots.map(sh =>
-            sh.id === s.activeShootId
-              ? { ...sh, name, updatedAt: new Date().toISOString() } : sh
-          ),
-        }))
-        const shoot = get().getActiveShoot()
-        if (shoot && orgId) {
-          upsertShootMeta(shoot, orgId).catch(e => console.error('[Sync] rename error:', e))
-        }
-      },
+      renameActiveShoot: (name) => set(s => ({
+        savedShoots: s.savedShoots.map(sh =>
+          sh.id === s.activeShootId
+            ? { ...sh, name, updatedAt: new Date().toISOString() } : sh
+        ),
+      })),
 
       updateShootItems: (items) => set(s => ({
         savedShoots: s.savedShoots.map(sh =>
@@ -224,57 +199,36 @@ const useAppStore = create<AppStore>()(
         ),
       })),
 
-      addDropToActiveShoot: (drop, items) => {
-        const orgId = get().orgId
-        set(s => ({
-          savedShoots: s.savedShoots.map(sh => {
-            if (sh.id !== s.activeShootId) return sh
-            return {
-              ...sh,
-              items: [...sh.items, ...items],
-              drops: [...sh.drops, drop],
-              updatedAt: new Date().toISOString(),
-            }
-          }),
-        }))
-        // Sync shoot metadata to Supabase
-        const shoot = get().getActiveShoot()
-        if (shoot && orgId) {
-          upsertShootMeta(shoot, orgId).catch(e => console.error('[Sync] addDrop error:', e))
-        }
-      },
+      addDropToActiveShoot: (drop, items) => set(s => ({
+        savedShoots: s.savedShoots.map(sh => {
+          if (sh.id !== s.activeShootId) return sh
+          return {
+            ...sh,
+            items: [...sh.items, ...items],
+            drops: [...sh.drops, drop],
+            updatedAt: new Date().toISOString(),
+          }
+        }),
+      })),
 
-      clearActiveShoot: () => {
-        const { activeShootId, orgId } = get()
-        set(s => ({
-          savedShoots: s.savedShoots.map(sh =>
-            sh.id === s.activeShootId
-              ? { ...sh, items: [], drops: [], updatedAt: new Date().toISOString() } : sh
-          ),
-        }))
-        if (activeShootId) {
-          deleteItemsByShoot(activeShootId).catch(e => console.error('[Sync] clear error:', e))
-        }
-      },
+      clearActiveShoot: () => set(s => ({
+        savedShoots: s.savedShoots.map(sh =>
+          sh.id === s.activeShootId
+            ? { ...sh, items: [], drops: [], updatedAt: new Date().toISOString() } : sh
+        ),
+      })),
 
-      bumpLook: () => {
-        const orgId = get().orgId
-        set(s => {
-          const newLook = s.currentIntakeLook + 1
-          const savedShoots = s.savedShoots.map(sh => {
-            if (sh.id !== s.activeShootId) return sh
-            const lookOrder = sh.lookOrder.includes(newLook)
-              ? sh.lookOrder
-              : [...sh.lookOrder, newLook].sort((a, b) => a - b)
-            return { ...sh, lookOrder, updatedAt: new Date().toISOString() }
-          })
-          return { currentIntakeLook: newLook, savedShoots }
+      bumpLook: () => set(s => {
+        const newLook = s.currentIntakeLook + 1
+        const savedShoots = s.savedShoots.map(sh => {
+          if (sh.id !== s.activeShootId) return sh
+          const lookOrder = sh.lookOrder.includes(newLook)
+            ? sh.lookOrder
+            : [...sh.lookOrder, newLook].sort((a, b) => a - b)
+          return { ...sh, lookOrder, updatedAt: new Date().toISOString() }
         })
-        const shoot = get().getActiveShoot()
-        if (shoot && orgId) {
-          upsertShootMeta(shoot, orgId).catch(e => console.error('[Sync] bumpLook error:', e))
-        }
-      },
+        return { currentIntakeLook: newLook, savedShoots }
+      }),
 
       // ── Item actions ──────────────────────────────────────
       updateItem: (itemId, updates) => {
@@ -287,13 +241,9 @@ const useAppStore = create<AppStore>()(
         const client = get().getClient(shoot?.clientId ?? null)
         const pt = client?.productTypes.find(p => p.name === productType)
         const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-        const items = get().getItems().map(i =>
-          i.id === itemId ? { ...i, productType, requiredAngles } : i
+        get().updateShootItems(
+          get().getItems().map(i => i.id === itemId ? { ...i, productType, requiredAngles } : i)
         )
-        get().updateShootItems(items)
-        // Sync to Supabase
-        updateItemStatus(itemId, { productType, requiredAngles })
-          .catch(e => console.error('[Sync] assignProductType error:', e))
       },
 
       toggleAngle: (itemId, angle) => {
@@ -315,14 +265,6 @@ const useAppStore = create<AppStore>()(
           }
         })
         get().updateShootItems(items)
-        const item = items.find(i => i.id === itemId)
-        if (item) {
-          updateItemStatus(itemId, {
-            completedAngles: item.completedAngles,
-            shotStatus: item.shotStatus,
-            shotAt: item.shotAt,
-          }).catch(e => console.error('[Sync] toggleAngle error:', e))
-        }
       },
 
       bulkAssignProductType: (itemIds, productType) => {
@@ -330,14 +272,11 @@ const useAppStore = create<AppStore>()(
         const client = get().getClient(shoot?.clientId ?? null)
         const pt = client?.productTypes.find(p => p.name === productType)
         const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-        const items = get().getItems().map(i =>
-          itemIds.includes(i.id) ? { ...i, productType, requiredAngles } : i
+        get().updateShootItems(
+          get().getItems().map(i =>
+            itemIds.includes(i.id) ? { ...i, productType, requiredAngles } : i
+          )
         )
-        get().updateShootItems(items)
-        // Sync all affected items
-        Promise.all(itemIds.map(id =>
-          updateItemStatus(id, { productType, requiredAngles })
-        )).catch(e => console.error('[Sync] bulkAssign error:', e))
       },
 
       // ── Scan In ───────────────────────────────────────────
@@ -365,11 +304,10 @@ const useAppStore = create<AppStore>()(
           completedAngles: markShotOnScanIn ? item.requiredAngles : item.completedAngles,
         }
 
-        // Update local state
         updateShootItems(items.map(i => i.id === item.id ? updatedItem : i))
         set({ lastScanFeedback: fb('success', markShotOnScanIn ? 'Received + Shot' : 'Received', sku) })
 
-        // Save to Supabase immediately
+        // Save immediately to Supabase — hybrid sync
         updateItemStatus(item.id, {
           status: updatedItem.status,
           receivedAt: updatedItem.receivedAt,
@@ -390,25 +328,24 @@ const useAppStore = create<AppStore>()(
         if (item.status === 'dispatched') { set({ lastScanFeedback: fb('alreadyDispatched', 'Already dispatched', sku) }); return }
         if (item.status === 'pending') { set({ lastScanFeedback: fb('notYetReceived', 'Not yet received — scan in first', sku) }); return }
 
-        const updatedItem: StockItem = {
+        const dispatchedItem = {
           ...item,
           status: 'dispatched' as ItemStatus,
           dispatchedAt: new Date().toISOString(),
           dispatchedTo: to,
         }
-
-        updateShootItems(items.map(i => i.id === item.id ? updatedItem : i))
+        updateShootItems(items.map(i => i.id === item.id ? dispatchedItem : i))
         set({ lastScanFeedback: fb('success', `Dispatched to ${to}`, sku) })
 
-        // Save to Supabase immediately
+        // Save immediately to Supabase — hybrid sync
         updateItemStatus(item.id, {
-          status: updatedItem.status,
-          dispatchedAt: updatedItem.dispatchedAt,
-          dispatchedTo: updatedItem.dispatchedTo,
+          status: dispatchedItem.status,
+          dispatchedAt: dispatchedItem.dispatchedAt,
+          dispatchedTo: dispatchedItem.dispatchedTo,
         }).catch(e => console.error('[Sync] scanOut error:', e))
       },
 
-      // ── Settings ──────────────────────────────────────────
+      // ── Sync actions ──────────────────────────────────────
       setShoots: (shoots) => set({ savedShoots: shoots }),
       setClients: (clients) => set({ clients }),
       setActiveShootId: (id) => set({ activeShootId: id }),
@@ -419,8 +356,7 @@ const useAppStore = create<AppStore>()(
     }),
     {
       name: 'stockshot-v1',
-      // Only persist session/prefs — NOT shoots or items
-      // Supabase is the source of truth for data
+      // Only persist session prefs — Supabase is source of truth for data
       partialize: (s) => ({
         activeShootId: s.activeShootId,
         orgId: s.orgId,

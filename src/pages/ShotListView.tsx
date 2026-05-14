@@ -12,7 +12,7 @@ import LookBuilder from '../components/LookBuilder'
 export default function ShotListView() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'notShot' | 'shot' | 'partial'>('all')
-  const [groupBy, setGroupBy] = useState<'look' | 'productType' | 'none'>('none')
+  const [groupBy, setGroupBy] = useState<'look' | 'productType' | 'none'>('look')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showLabelModal, setShowLabelModal] = useState(false)
   const [labelOptions, setLabelOptions] = useState<LabelOptions>({
