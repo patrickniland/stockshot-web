@@ -224,5 +224,6 @@ function mapItemFromDB(row: any): StockItem {
     shotAt: row.shot_at ?? null,
     notes: row.notes ?? '',
     dropId: row.drop_id ?? null,
+    updatedAt: row.updated_at ?? null,
   }
 }

@@ -74,6 +74,7 @@ export interface StockItem {
   dispatchedTo: string
   shotAt: string | null
   notes: string
+  updatedAt?: string | null  // from Supabase server clock
   dropId: string | null
 }
 
