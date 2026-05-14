@@ -176,11 +176,14 @@ export function useSupabaseSync(orgId: string | null) {
         { event: '*', schema: 'public', table: 'shoots', filter: `org_id=eq.${orgId}` },
         async () => {
           try {
-            const metas = await fetchShoots(orgId!)
             const current = useAppStore.getState().savedShoots
+            const deletedIds = useAppStore.getState().deletedShootIds ?? []
+            const metas = await fetchShoots(orgId!)
+            // Filter out shoots we've locally deleted — don't let them come back
+            const filtered = metas.filter(m => !deletedIds.includes(m.id))
             // Merge: update metadata but keep existing items in memory
             setShoots(
-              metas.map(meta => ({
+              filtered.map(meta => ({
                 ...meta,
                 items: current.find(s => s.id === meta.id)?.items ?? [],
               }))
