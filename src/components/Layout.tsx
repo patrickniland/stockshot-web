@@ -17,10 +17,13 @@ const NAV = [
   { to: '/clients',   icon: '🏢', label: 'Clients' },
 ]
 
-export default function Layout({ children, session, onSignOut }: { 
+export default function Layout({ children, session, onSignOut, onPush, onPull, syncStatus }: { 
   children: React.ReactNode
   session?: Session | null
   onSignOut?: () => void
+  onPush?: () => void
+  onPull?: () => void
+  syncStatus?: string
 }) {
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getNotShot = useAppStore(s => s.getNotShot)
