@@ -1,9 +1,8 @@
-// StockShot — Supabase Sync Hook
-// Architecture:
-//   - On load: fetch all shoots + items from Supabase
-//   - Scans/changes: store actions write directly to Supabase (fire and forget)
-//   - Real-time: Supabase notifies when stock_items or shoots change on other devices
-//   - No polling, no auto-save loops, no conflicts
+// StockShot — Manual Sync Hook
+// No automatic loops. User controls when to push/pull.
+// On app load: fetch from Supabase once.
+// Push: save local state to Supabase on demand.
+// Pull: fetch latest from Supabase on demand.
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -12,14 +11,18 @@ import {
   fetchItemsForShoot,
   fetchClients,
   upsertShootMeta,
+  upsertItems,
   upsertClient,
   deleteShoot,
   deleteClientFromDB,
 } from '../lib/db'
 import useAppStore from '../store/useAppStore'
 
+export type SyncStatus = 'idle' | 'pushing' | 'pulling' | 'error' | 'success'
+
 export function useSupabaseSync(orgId: string | null) {
   const [loaded, setLoaded] = useState(false)
+  const [status, setStatus] = useState<SyncStatus>('idle')
   const loadedRef = useRef(false)
 
   const setShoots = useAppStore(s => s.setShoots)
@@ -27,18 +30,19 @@ export function useSupabaseSync(orgId: string | null) {
   const activeShootId = useAppStore(s => s.activeShootId)
   const setActiveShootId = useAppStore(s => s.setActiveShootId)
 
-  // ── Load all data on startup ──────────────────────────────────────────────
+  // ── Load on startup (once only) ───────────────────────────────────────────
   useEffect(() => {
     if (!orgId || loadedRef.current) return
+    loadedRef.current = true
 
     async function loadAll() {
+      setStatus('pulling')
       try {
         const [shootMetas, clients] = await Promise.all([
           fetchShoots(orgId!),
           fetchClients(orgId!),
         ])
 
-        // Fetch items for each shoot in parallel
         const shoots = await Promise.all(
           shootMetas.map(async meta => ({
             ...meta,
@@ -49,7 +53,6 @@ export function useSupabaseSync(orgId: string | null) {
         setShoots(shoots)
         setClients(clients)
 
-        // Set active shoot if none set or current one doesn't exist
         const activeShoots = shoots.filter(s => !s.deletedAt)
         if (activeShoots.length > 0) {
           const currentExists = activeShoots.some(s => s.id === activeShootId)
@@ -58,146 +61,82 @@ export function useSupabaseSync(orgId: string | null) {
           }
         }
 
-        loadedRef.current = true
-        setLoaded(true)
+        setStatus('success')
+        setTimeout(() => setStatus('idle'), 2000)
       } catch (e) {
-        console.error('[Sync] Initial load failed:', e)
-        setLoaded(true) // Still mark loaded so UI shows
+        console.error('[Sync] Load failed:', e)
+        setStatus('error')
+      } finally {
+        setLoaded(true)
       }
     }
 
     loadAll()
   }, [orgId])
 
-  // ── Save shoot metadata changes to Supabase ───────────────────────────────
-  // Fires when shoot names, drops, lookOrder, deletedAt change
-  // Does NOT fire on item changes (those save directly from store actions)
-  const savedShoots = useAppStore(s => s.savedShoots)
-  const deletedShootIds = useAppStore(s => s.deletedShootIds)
-  const clients = useAppStore(s => s.clients)
-  const deletedClientIds = useAppStore(s => s.deletedClientIds)
+  // ── Push: save local state to Supabase ────────────────────────────────────
+  async function push() {
+    if (!orgId) return
+    setStatus('pushing')
+    try {
+      const { savedShoots, clients, deletedShootIds, deletedClientIds } = useAppStore.getState()
 
-  // Track previous values to detect real changes
-  const prevShootMetaRef = useRef<string>('')
-  const prevClientsRef = useRef<string>('')
+      // Save shoot metadata
+      await Promise.all(savedShoots.map(s => upsertShootMeta(s, orgId)))
 
-  useEffect(() => {
-    if (!orgId || !loadedRef.current) return
-
-    // Create a fingerprint of shoot metadata only (not items)
-    const metaFingerprint = savedShoots.map(s =>
-      `${s.id}:${s.name}:${s.updatedAt}:${s.deletedAt}:${s.drops.length}:${s.lookOrder.join(',')}`
-    ).join('|')
-
-    if (metaFingerprint === prevShootMetaRef.current) return
-    prevShootMetaRef.current = metaFingerprint
-
-    async function syncShootMeta() {
-      try {
-        await Promise.all(savedShoots.map(s => upsertShootMeta(s, orgId!)))
-        if (deletedShootIds?.length) {
-          await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
-        }
-      } catch (e) {
-        console.error('[Sync] Shoot meta save error:', e)
-      }
-    }
-
-    syncShootMeta()
-  }, [savedShoots, deletedShootIds, orgId])
-
-  useEffect(() => {
-    if (!orgId || !loadedRef.current) return
-
-    const fingerprint = JSON.stringify(clients)
-    if (fingerprint === prevClientsRef.current) return
-    prevClientsRef.current = fingerprint
-
-    async function syncClients() {
-      try {
-        await Promise.all(clients.map(c => upsertClient(c, orgId!)))
-        if (deletedClientIds?.length) {
-          await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
-        }
-      } catch (e) {
-        console.error('[Sync] Client save error:', e)
-      }
-    }
-
-    syncClients()
-  }, [clients, deletedClientIds, orgId])
-
-  // ── Real-time subscriptions ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!orgId || !loaded) return
-
-    // Listen for stock_items changes from OTHER devices
-    // When an item changes, reload ONLY that shoot's items
-    const itemsCh = supabase
-      .channel(`items-${orgId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'stock_items', filter: `org_id=eq.${orgId}` },
-        async (payload) => {
-          const changed = payload.new as any
-          if (!changed?.shoot_id || !changed?.id) return
-
-          try {
-            const currentShoots = useAppStore.getState().savedShoots
-            const currentShoot = currentShoots.find(s => s.id === changed.shoot_id)
-            const currentItem = currentShoot?.items.find(i => i.id === changed.id)
-
-            // Last-write-wins: only apply if incoming is newer than local
-            // updated_at comes from Supabase server clock — reliable arbiter
-            if (currentItem && changed.updated_at && currentItem.updatedAt) {
-              if (changed.updated_at <= currentItem.updatedAt) {
-                return // Local version is newer — ignore incoming
-              }
-            }
-
-            const items = await fetchItemsForShoot(changed.shoot_id)
-            setShoots(
-              currentShoots.map(s =>
-                s.id === changed.shoot_id ? { ...s, items } : s
-              )
-            )
-          } catch (e) {
-            console.error('[Realtime] Item update error:', e)
-          }
-        }
+      // Save all items for each shoot
+      await Promise.all(
+        savedShoots.map(s => upsertItems(s.items, s.id, orgId))
       )
-      .subscribe()
 
-    // Listen for shoot metadata changes from OTHER devices
-    const shootsCh = supabase
-      .channel(`shoots-${orgId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'shoots', filter: `org_id=eq.${orgId}` },
-        async () => {
-          try {
-            const current = useAppStore.getState().savedShoots
-            const deletedIds = useAppStore.getState().deletedShootIds ?? []
-            const metas = await fetchShoots(orgId!)
-            // Filter out shoots we've locally deleted — don't let them come back
-            const filtered = metas.filter(m => !deletedIds.includes(m.id))
-            // Merge: update metadata but keep existing items in memory
-            setShoots(
-              filtered.map(meta => ({
-                ...meta,
-                items: current.find(s => s.id === meta.id)?.items ?? [],
-              }))
-            )
-          } catch (e) {
-            console.error('[Realtime] Shoot meta update error:', e)
-          }
-        }
-      )
-      .subscribe()
+      // Save clients
+      await Promise.all(clients.map(c => upsertClient(c, orgId)))
 
-    return () => {
-      supabase.removeChannel(itemsCh)
-      supabase.removeChannel(shootsCh)
+      // Delete removed shoots and clients
+      if (deletedShootIds?.length) {
+        await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
+      }
+      if (deletedClientIds?.length) {
+        await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
+      }
+
+      setStatus('success')
+      setTimeout(() => setStatus('idle'), 2000)
+    } catch (e) {
+      console.error('[Sync] Push failed:', e)
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 3000)
     }
-  }, [orgId, loaded])
+  }
+
+  // ── Pull: fetch latest from Supabase ──────────────────────────────────────
+  async function pull() {
+    if (!orgId) return
+    setStatus('pulling')
+    try {
+      const [shootMetas, clients] = await Promise.all([
+        fetchShoots(orgId),
+        fetchClients(orgId),
+      ])
+
+      const shoots = await Promise.all(
+        shootMetas.map(async meta => ({
+          ...meta,
+          items: await fetchItemsForShoot(meta.id),
+        }))
+      )
+
+      setShoots(shoots)
+      setClients(clients)
+
+      setStatus('success')
+      setTimeout(() => setStatus('idle'), 2000)
+    } catch (e) {
+      console.error('[Sync] Pull failed:', e)
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 3000)
+    }
+  }
+
+  return { loaded, status, push, pull }
 }

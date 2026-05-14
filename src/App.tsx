@@ -1,4 +1,4 @@
-// StockShot — App Entry Point with Auth Gate and Real-time Sync
+// StockShot — App Entry with Auth + Manual Sync
 
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
@@ -22,8 +22,8 @@ import { Session } from '@supabase/supabase-js'
 function AppWithSync({ session }: { session: Session }) {
   const orgId = useAppStore(s => s.orgId)
   const setOrgId = useAppStore(s => s.setOrgId)
+  const { status, push, pull } = useSupabaseSync(orgId)
 
-  // Get or create org for this user
   useEffect(() => {
     async function initOrg() {
       try {
@@ -41,12 +41,15 @@ function AppWithSync({ session }: { session: Session }) {
     initOrg()
   }, [session.user.id])
 
-  // Start real-time sync
-  useSupabaseSync(orgId)
-
   return (
     <BrowserRouter>
-      <Layout session={session} onSignOut={signOut}>
+      <Layout
+        session={session}
+        onSignOut={signOut}
+        onPush={push}
+        onPull={pull}
+        syncStatus={status}
+      >
         <Routes>
           <Route path="/" element={<Navigate to="/import" replace />} />
           <Route path="/import" element={<ImportView />} />
@@ -69,33 +72,26 @@ export default function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
     })
-
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setLoading(false)
     })
-
     return () => subscription.unsubscribe()
   }, [])
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F5F5' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>📷</div>
-          <p style={{ fontSize: '14px', color: '#888' }}>Loading StockShot...</p>
-        </div>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F5F5' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '32px', marginBottom: '12px' }}>📷</div>
+        <p style={{ fontSize: '14px', color: '#888' }}>Loading StockShot...</p>
       </div>
-    )
-  }
+    </div>
+  )
 
   if (!session) return <LoginView />
-
   return <AppWithSync session={session} />
 }

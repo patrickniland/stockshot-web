@@ -3,6 +3,7 @@
 import { NavLink } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { Session } from '@supabase/supabase-js'
+import { Session } from '@supabase/supabase-js'
 
 const NAV = [
   { to: '/import',    icon: '⬇', label: 'Import Stock' },
@@ -123,6 +124,52 @@ export default function Layout({ children, session, onSignOut }: {
               title="Sign out">
               ↪
             </button>
+          </div>
+        )}
+
+        {/* Sync buttons */}
+        {onPush && (
+          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', gap: '6px' }}>
+            <button onClick={onPull} style={{
+              flex: 1, padding: '6px', background: '#1a3a5c', border: 'none',
+              borderRadius: '5px', color: '#7BB8F0', fontSize: '11px',
+              cursor: 'pointer', fontWeight: 500,
+            }}>
+              ↓ Pull
+            </button>
+            <button onClick={onPush} style={{
+              flex: 1, padding: '6px', background: '#1a3a1a', border: 'none',
+              borderRadius: '5px', color: '#7BF07B', fontSize: '11px',
+              cursor: 'pointer', fontWeight: 500,
+            }}>
+              ↑ Push
+            </button>
+          </div>
+        )}
+        {syncStatus && syncStatus !== 'idle' && (
+          <div style={{
+            padding: '4px 12px', fontSize: '10px', textAlign: 'center',
+            color: syncStatus === 'error' ? '#ff6b6b' : syncStatus === 'success' ? '#7BF07B' : '#aaa',
+          }}>
+            {syncStatus === 'pushing' ? '↑ Pushing...' :
+             syncStatus === 'pulling' ? '↓ Pulling...' :
+             syncStatus === 'success' ? '✓ Done' :
+             syncStatus === 'error' ? '✗ Sync failed' : ''}
+          </div>
+        )}
+
+        {/* User strip */}
+        {session && (
+          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {session.user.user_metadata?.avatar_url && (
+              <img src={session.user.user_metadata.avatar_url} style={{ width: '22px', height: '22px', borderRadius: '50%' }} alt="" />
+            )}
+            <span style={{ fontSize: '10px', color: '#666', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {session.user.user_metadata?.full_name || session.user.email}
+            </span>
+            <button onClick={onSignOut} title="Sign out" style={{
+              background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '12px',
+            }}>↪</button>
           </div>
         )}
 
