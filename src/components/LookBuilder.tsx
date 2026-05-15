@@ -84,17 +84,26 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
 
   function applyBulkAction() {
     if (!bulkLook) return
-    const look = parseInt(bulkLook)
+    // Handle new look
+    let look: number
+    if (bulkLook === 'new') {
+      look = Math.max(0, ...allLooks) + 1
+      onAddLook()
+    } else {
+      look = parseInt(bulkLook)
+    }
+    // Process all selected items regardless of current look state
     selectedIds.forEach(id => {
       const item = items.find(i => i.id === id)
       if (!item) return
       if (bulkAction === 'add') {
-        // Add look without removing existing ones
-        if (!item.looks.includes(look)) {
-          onUpdateItem(item.id, [...item.looks, look].sort((a, b) => a - b))
-        }
+        // Add look without removing existing ones — always apply even if already has it
+        const newLooks = item.looks.includes(look)
+          ? item.looks
+          : [...item.looks, look].sort((a, b) => a - b)
+        onUpdateItem(item.id, newLooks)
       } else {
-        // Move — replace all existing looks with just this one
+        // Move — always replace ALL existing looks with just this one
         onUpdateItem(item.id, [look])
       }
     })
@@ -214,6 +223,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               style={{ padding: '4px 8px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px', flex: 1 }}>
               <option value="">Select look...</option>
               {allLooks.map(l => <option key={l} value={l}>Look {l}</option>)}
+              <option value="new">+ New Look</option>
             </select>
             <button onClick={applyBulkAction} disabled={!bulkLook} style={{
               padding: '5px 12px', background: bulkLook ? '#1565C0' : '#E0E0E0',
