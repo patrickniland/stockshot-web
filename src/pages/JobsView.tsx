@@ -1,6 +1,7 @@
 // StockShot — Jobs / Shoots View
 
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { Shoot } from '../types'
 
