@@ -30,6 +30,7 @@ export default function ShotListView() {
   const bumpLook = useAppStore(s => s.bumpLook)
   const activeShootId = useAppStore(s => s.activeShootId)
   const updateShootItems = useAppStore(s => s.updateShootItems)
+  const storeUpdateItem = useAppStore(s => s.updateItem)
   const clients = useAppStore(s => s.clients)
 
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
@@ -191,10 +192,7 @@ export default function ShotListView() {
         <LookBuilder
           items={allItems}
           lookOrder={shoot.lookOrder}
-          onUpdateItem={(itemId, looks) => {
-            const updated = shoot.items.map(i => i.id === itemId ? { ...i, looks } : i)
-            updateShootItems(updated)
-          }}
+          onUpdateItem={(itemId, looks) => storeUpdateItem(itemId, { looks })}
           onAddLook={() => bumpLook()}
           onClose={() => setShowLookBuilder(false)}
         />
