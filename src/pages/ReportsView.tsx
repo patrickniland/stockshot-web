@@ -1,11 +1,8 @@
 // StockShot — Dashboard / Reports View
 
-import { useState } from 'react'
 import useAppStore from '../store/useAppStore'
 
 export default function ReportsView() {
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
-
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getItems = useAppStore(s => s.getItems)
   const getReceived = useAppStore(s => s.getReceived)
@@ -14,7 +11,6 @@ export default function ReportsView() {
   const getShot = useAppStore(s => s.getShot)
   const getNotShot = useAppStore(s => s.getNotShot)
   const pendingIsMeaningful = useAppStore(s => s.pendingIsMeaningful)
-  const clearActiveShoot = useAppStore(s => s.clearActiveShoot)
   const clientName = useAppStore(s => s.clientName)
 
   const shoot = getActiveShoot()
@@ -113,35 +109,6 @@ export default function ReportsView() {
         </div>
       )}
 
-      {/* Danger zone */}
-      <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem' }}>
-        <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '10px' }}>Data Management</p>
-        <div style={{ background: '#FFEBEE', borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: '#B71C1C' }}>Clear All Data</div>
-            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-              Removes all {total} imported items. Cannot be undone.
-            </div>
-          </div>
-          {showClearConfirm ? (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => { clearActiveShoot(); setShowClearConfirm(false) }}
-                style={{ padding: '6px 14px', background: '#B71C1C', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                Yes, clear
-              </button>
-              <button onClick={() => setShowClearConfirm(false)}
-                style={{ padding: '6px 14px', background: '#F5F5F5', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#666' }}>
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setShowClearConfirm(true)} disabled={total === 0}
-              style={{ padding: '6px 14px', background: total === 0 ? '#E0E0E0' : '#fff', border: '1px solid #FFCDD2', borderRadius: '6px', fontSize: '12px', cursor: total === 0 ? 'default' : 'pointer', color: total === 0 ? '#aaa' : '#B71C1C' }}>
-              Clear All Data
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   )
 }
