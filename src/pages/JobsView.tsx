@@ -1,7 +1,6 @@
 // StockShot — Jobs / Shoots View
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { Shoot } from '../types'
 
@@ -10,7 +9,6 @@ export default function JobsView() {
   const [editingName, setEditingName] = useState('')
   const [expandedDrops, setExpandedDrops] = useState<string | null>(null)
 
-  const navigate = useNavigate()
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
   const switchToShoot = useAppStore(s => s.switchToShoot)
@@ -84,7 +82,7 @@ export default function JobsView() {
 
             return (
               <div key={shoot.id}
-                onClick={() => { if (!isActive) { switchToShoot(shoot); navigate('/stock') } }}
+                onClick={() => { if (!isActive) switchToShoot(shoot) }}
                 style={{
                   background: '#fff',
                   border: `${isActive ? 1.5 : 1}px solid ${isActive ? '#2E7D32' : '#E0E0E0'}`,
@@ -181,7 +179,7 @@ export default function JobsView() {
                   {/* Actions */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
                     {!isActive && (
-                      <button onClick={() => { switchToShoot(shoot); navigate('/stock') }}
+                      <button onClick={() => switchToShoot(shoot)}
                         style={{ padding: '6px 12px', background: '#1565C0', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}>
                         Switch
                       </button>

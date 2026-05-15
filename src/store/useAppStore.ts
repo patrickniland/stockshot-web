@@ -133,9 +133,31 @@ const useAppStore = create<AppStore>()(
 
       // ── Clients ───────────────────────────────────────────
       addClient: (client) => set(s => ({ clients: [...s.clients, client] })),
-      updateClient: (client) => set(s => ({
-        clients: s.clients.map(c => c.id === client.id ? client : c)
-      })),
+      updateClient: (client) => set(s => {
+        // Update client
+        const clients = s.clients.map(c => c.id === client.id ? client : c)
+
+        // Auto-assign angles to all items in shoots for this client
+        // Only updates items that have a matching product type
+        const savedShoots = s.savedShoots.map(shoot => {
+          if (shoot.clientId !== client.id) return shoot
+          const items = shoot.items.map(item => {
+            if (!item.productType) return item
+            const pt = client.productTypes.find(p =>
+              p.name.toLowerCase() === item.productType!.toLowerCase() ||
+              p.aliases?.some(a => a.toLowerCase() === item.productType!.toLowerCase())
+            )
+            if (!pt) return item
+            // Only update if angles have changed
+            const newAngles = pt.requiredAngles.map(a => a.name)
+            if (JSON.stringify(newAngles) === JSON.stringify(item.requiredAngles)) return item
+            return { ...item, requiredAngles: newAngles }
+          })
+          return { ...shoot, items, updatedAt: new Date().toISOString() }
+        })
+
+        return { clients, savedShoots }
+      }),
       deleteClient: (clientId) => set(s => ({
         clients: s.clients.filter(c => c.id !== clientId),
         deletedClientIds: [...s.deletedClientIds, clientId],

@@ -17,12 +17,36 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLook, setBulkLook] = useState<string>('')
   const [filterLook, setFilterLook] = useState<string>('all')
+  const [receivedOnly, setReceivedOnly] = useState(true)
+  const [extraFieldFilter, setExtraFieldFilter] = useState<string>('') // format: "key:value"
+
+  // Build dynamic filter options from extraFields across all items
+  const extraFieldOptions = (() => {
+    const map: Record<string, Set<string>> = {}
+    items.forEach(item => {
+      Object.entries(item.extraFields ?? {}).forEach(([key, val]) => {
+        if (!val) return
+        if (!map[key]) map[key] = new Set()
+        map[key].add(String(val))
+      })
+    })
+    return map
+  })()
+  const hasExtraFields = Object.keys(extraFieldOptions).length > 0
   const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
 
-  const lookFiltered = filterLook === 'all' ? items : items.filter(i => 
+  const receivedItems = receivedOnly ? items.filter(i => i.status === 'received') : items
+  const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i => 
     filterLook === 'none' ? i.looks.length === 0 : i.looks.includes(parseInt(filterLook))
   )
-  const filtered = lookFiltered.filter(i => {
+  const extraFiltered = extraFieldFilter
+    ? lookFiltered.filter(i => {
+        const [key, val] = extraFieldFilter.split(':')
+        return String(i.extraFields?.[key] ?? '') === val
+      })
+    : lookFiltered
+
+  const filtered = extraFiltered.filter(i => {
     if (!search) return true
     const q = search.toLowerCase()
     return i.styleNumber.toLowerCase().includes(q) ||
@@ -131,6 +155,21 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           </button>
         </div>
 
+        {/* Received only toggle + Look filter */}
+        <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button onClick={() => setReceivedOnly(!receivedOnly)} style={{
+            padding: '5px 10px', borderRadius: '5px', fontSize: '11px',
+            fontWeight: 600, cursor: 'pointer', border: 'none', flexShrink: 0,
+            background: receivedOnly ? '#E8F5E9' : '#F5F5F5',
+            color: receivedOnly ? '#2E7D32' : '#666',
+          }}>
+            {receivedOnly ? '✓ Received only' : 'All items'}
+          </button>
+          <span style={{ fontSize: '11px', color: '#aaa' }}>
+            {receivedOnly ? `${items.filter(i => i.status === 'received').length} received` : `${items.length} total`}
+          </span>
+        </div>
+
         {/* Look filter dropdown */}
         <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '12px', color: '#666', flexShrink: 0 }}>Filter by Look:</span>
@@ -189,6 +228,29 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
             }}>
               Clear
             </button>
+          </div>
+        )}
+
+        {/* Extra field filters */}
+        {hasExtraFields && (
+          <div style={{ padding: '8px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '11px', color: '#666', flexShrink: 0 }}>Filter by:</span>
+            {Object.entries(extraFieldOptions).map(([key, values]) => (
+              <select key={key}
+                value={extraFieldFilter.startsWith(key + ':') ? extraFieldFilter : ''}
+                onChange={e => setExtraFieldFilter(e.target.value)}
+                style={{ padding: '4px 8px', border: '1px solid #E0E0E0', borderRadius: '5px', fontSize: '11px', cursor: 'pointer' }}>
+                <option value="">{key} (all)</option>
+                {[...values].sort().map(v => (
+                  <option key={v} value={`${key}:${v}`}>{v}</option>
+                ))}
+              </select>
+            ))}
+            {extraFieldFilter && (
+              <button onClick={() => setExtraFieldFilter('')} style={{
+                background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '12px'
+              }}>✕ Clear</button>
+            )}
           </div>
         )}
 

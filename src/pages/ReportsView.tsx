@@ -118,7 +118,6 @@ export default function ReportsView() {
         <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '10px' }}>Data Management</p>
         <div style={{ background: '#FFEBEE', borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: '#B71C1C' }}>Clear All Data</div>
             <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
               Removes all {total} imported items. Cannot be undone.
             </div>
