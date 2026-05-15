@@ -6,6 +6,8 @@ import { ScanFeedback } from '../types'
 import CameraScanner from '../components/CameraScanner'
 
 export default function ScanInView() {
+  const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
+  useEffect(() => { setLastScanFeedback(null) }, [])
   const [scanInput, setScanInput] = useState('')
   const [showCamera, setShowCamera] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)

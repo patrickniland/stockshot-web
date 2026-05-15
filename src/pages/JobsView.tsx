@@ -12,6 +12,7 @@ export default function JobsView() {
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
   const switchToShoot = useAppStore(s => s.switchToShoot)
+  const navigate = useNavigate()
   const softDeleteShoot = useAppStore(s => s.softDeleteShoot)
   const restoreShoot = useAppStore(s => s.restoreShoot)
   const permanentlyDeleteShoot = useAppStore(s => s.permanentlyDeleteShoot)

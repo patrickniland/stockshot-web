@@ -6,6 +6,11 @@ import { ScanFeedback } from '../types'
 import CameraScanner from '../components/CameraScanner'
 
 export default function ScanOutView() {
+  const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
+  
+  useEffect(() => {
+    setLastScanFeedback(null)
+  }, [])
   const [scanInput, setScanInput] = useState('')
   const [dispatchTo, setDispatchTo] = useState('')
   const [showCamera, setShowCamera] = useState(false)
@@ -82,7 +87,7 @@ export default function ScanOutView() {
         <div style={{ width: '1px', background: '#E0E0E0' }} />
         <StatPill value={dispatched.length} label="Dispatched" color="#1565C0" />
         <div style={{ width: '1px', background: '#E0E0E0' }} />
-        <StatPill value={pending.length} label="Outstanding" color="#E65100" />
+        <StatPill value={pending.length} label="Not Dispatched" color="#E65100" />
       </div>
 
       {/* Scan card */}

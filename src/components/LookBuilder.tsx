@@ -84,7 +84,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
 
   function applyBulkAction() {
     if (!bulkLook) return
-    // Handle new look
     let look: number
     if (bulkLook === 'new') {
       look = Math.max(0, ...allLooks) + 1
@@ -92,19 +91,24 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
     } else {
       look = parseInt(bulkLook)
     }
-    // Process all selected items regardless of current look state
-    selectedIds.forEach(id => {
-      const item = items.find(i => i.id === id)
-      if (!item) return
+    // Batch ALL updates at once to avoid stale closure issues
+    const updatedItems = items.map(item => {
+      if (!selectedIds.has(item.id)) return item
       if (bulkAction === 'add') {
-        // Add look without removing existing ones — always apply even if already has it
         const newLooks = item.looks.includes(look)
           ? item.looks
           : [...item.looks, look].sort((a, b) => a - b)
-        onUpdateItem(item.id, newLooks)
+        return { ...item, looks: newLooks }
       } else {
-        // Move — always replace ALL existing looks with just this one
-        onUpdateItem(item.id, [look])
+        // Move — replace ALL looks with just this one
+        return { ...item, looks: [look] }
+      }
+    })
+    // Call onUpdateItem for each changed item
+    updatedItems.forEach(item => {
+      const original = items.find(i => i.id === item.id)
+      if (original && JSON.stringify(original.looks) !== JSON.stringify(item.looks)) {
+        onUpdateItem(item.id, item.looks)
       }
     })
     setSelectedIds(new Set())
@@ -225,6 +229,12 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               {allLooks.map(l => <option key={l} value={l}>Look {l}</option>)}
               <option value="new">+ New Look</option>
             </select>
+            <span style={{ fontSize: '11px', color: '#888' }}>or</span>
+            <input
+              type="number" min="1" placeholder="#"
+              onChange={e => e.target.value ? setBulkLook(e.target.value) : setBulkLook('')}
+              style={{ width: '48px', padding: '4px 6px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px' }}
+            />
             <button onClick={applyBulkAction} disabled={!bulkLook} style={{
               padding: '5px 12px', background: bulkLook ? '#1565C0' : '#E0E0E0',
               color: bulkLook ? '#fff' : '#999', border: 'none',
