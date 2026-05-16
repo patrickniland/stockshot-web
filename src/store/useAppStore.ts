@@ -50,6 +50,7 @@ interface AppStore {
   addDropToActiveShoot: (drop: Drop, items: StockItem[]) => void
   clearActiveShoot: () => void
   bumpLook: () => void
+  reorderLook: (lookA: number, lookB: number) => void
 
   updateItem: (itemId: string, updates: Partial<StockItem>) => void
   assignProductType: (itemId: string, productType: string) => void
@@ -250,6 +251,22 @@ const useAppStore = create<AppStore>()(
           return { ...sh, lookOrder, updatedAt: new Date().toISOString() }
         })
         return { currentIntakeLook: newLook, savedShoots }
+      }),
+
+      reorderLook: (lookA, lookB) => set(s => {
+        const sh = s.savedShoots.find(x => x.id === s.activeShootId)
+        if (!sh) return s
+        const swap = (n: number) => n === lookA ? lookB : n === lookB ? lookA : n
+        const items = sh.items.map(item => ({
+          ...item,
+          looks: item.looks.map(swap).sort((a, b) => a - b),
+        }))
+        const lookOrder = sh.lookOrder.map(swap).sort((a, b) => a - b)
+        return {
+          savedShoots: s.savedShoots.map(x =>
+            x.id === s.activeShootId ? { ...x, items, lookOrder, updatedAt: new Date().toISOString() } : x
+          ),
+        }
       }),
 
       // ── Item actions ──────────────────────────────────────

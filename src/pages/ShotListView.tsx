@@ -31,6 +31,7 @@ export default function ShotListView() {
   const activeShootId = useAppStore(s => s.activeShootId)
   const updateShootItems = useAppStore(s => s.updateShootItems)
   const storeUpdateItem = useAppStore(s => s.updateItem)
+  const reorderLook = useAppStore(s => s.reorderLook)
   const clients = useAppStore(s => s.clients)
 
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
@@ -95,12 +96,17 @@ export default function ShotListView() {
   }
 
   // Group items
-  const groups: Array<{ name: string; items: StockItem[] }> = []
+  const groups: Array<{ name: string; look?: number; items: StockItem[] }> = []
   if (groupBy === 'look') {
-    const looks = [...new Set(filtered.flatMap(i => i.looks))].sort((a, b) => a - b)
-    looks.forEach(look => {
+    const presentLooks = new Set(filtered.flatMap(i => i.looks))
+    // Use lookOrder for display order; append any looks not yet in lookOrder
+    const orderedLooks = [
+      ...(shoot?.lookOrder ?? []),
+      ...[...presentLooks].filter(l => !shoot?.lookOrder.includes(l)).sort((a, b) => a - b),
+    ].filter(l => presentLooks.has(l))
+    orderedLooks.forEach(look => {
       const gi = filtered.filter(i => i.looks.includes(look))
-      if (gi.length) groups.push({ name: `Look ${look}`, items: gi })
+      if (gi.length) groups.push({ name: `Look ${look}`, look, items: gi })
     })
   } else if (groupBy === 'productType') {
     const types = [...new Set(filtered.map(i => i.productType || 'Unassigned'))]
@@ -163,11 +169,27 @@ export default function ShotListView() {
           <div style={{ padding: '2rem', textAlign: 'center', color: '#888', fontSize: '13px' }}>
             No items here yet. Items appear once scanned in.
           </div>
-        ) : groups.map(group => (
+        ) : groups.map((group, gi) => (
           <div key={group.name}>
             {group.name && (
-              <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1 }}>
-                {group.name} — {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+              <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ flex: 1 }}>{group.name} — {group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
+                {groupBy === 'look' && group.look != null && (
+                  <div style={{ display: 'flex', gap: '2px' }}>
+                    <button
+                      disabled={gi === 0}
+                      onClick={() => reorderLook(group.look!, groups[gi - 1].look!)}
+                      style={{ padding: '1px 6px', fontSize: '11px', border: '1px solid #C9B8F5', borderRadius: '4px', background: gi > 0 ? '#fff' : 'transparent', color: gi > 0 ? '#7B1FA2' : '#C9B8F5', cursor: gi > 0 ? 'pointer' : 'default', lineHeight: 1.4 }}
+                      title="Move up in shooting schedule"
+                    >▲</button>
+                    <button
+                      disabled={gi === groups.length - 1}
+                      onClick={() => reorderLook(group.look!, groups[gi + 1].look!)}
+                      style={{ padding: '1px 6px', fontSize: '11px', border: '1px solid #C9B8F5', borderRadius: '4px', background: gi < groups.length - 1 ? '#fff' : 'transparent', color: gi < groups.length - 1 ? '#7B1FA2' : '#C9B8F5', cursor: gi < groups.length - 1 ? 'pointer' : 'default', lineHeight: 1.4 }}
+                      title="Move down in shooting schedule"
+                    >▼</button>
+                  </div>
+                )}
               </div>
             )}
             {group.items.map((item, i) => (
