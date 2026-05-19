@@ -17,6 +17,7 @@ import {
   deleteClientFromDB,
 } from '../lib/db'
 import useAppStore from '../store/useAppStore'
+import { Shoot } from '../types'
 
 export type SyncStatus = 'idle' | 'pushing' | 'pulling' | 'error' | 'success'
 
@@ -49,6 +50,40 @@ export function useSupabaseSync(orgId: string | null) {
             items: await fetchItemsForShoot(meta.id),
           }))
         )
+
+        // Backfill: create Unassigned shoot for any client that doesn't have one
+        const clientsMissingUnassigned = clients.filter(c =>
+          !shoots.some(s => s.clientId === c.id && s.isUnassigned)
+        )
+        if (clientsMissingUnassigned.length > 0) {
+          const rows = clientsMissingUnassigned.map(c => ({
+            id: crypto.randomUUID(),
+            name: `${c.name} — Unassigned`,
+            client_id: c.id,
+            org_id: orgId!,
+            is_unassigned: true,
+            drops: [],
+            look_order: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }))
+          const { data: created } = await supabase.from('shoots').insert(rows).select()
+          if (created) {
+            const newShoots: Shoot[] = created.map(row => ({
+              id: row.id,
+              name: row.name,
+              clientId: row.client_id,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at,
+              drops: [],
+              lookOrder: [],
+              deletedAt: null,
+              isUnassigned: true,
+              items: [],
+            }))
+            shoots.push(...newShoots)
+          }
+        }
 
         setShoots(shoots)
         setClients(clients)

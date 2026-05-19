@@ -4,25 +4,26 @@ import useAppStore from '../store/useAppStore'
 
 export default function ReportsView() {
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
-  const getItems = useAppStore(s => s.getItems)
-  const getReceived = useAppStore(s => s.getReceived)
-  const getDispatched = useAppStore(s => s.getDispatched)
-  const getPending = useAppStore(s => s.getPending)
-  const getShot = useAppStore(s => s.getShot)
-  const getNotShot = useAppStore(s => s.getNotShot)
-  const pendingIsMeaningful = useAppStore(s => s.pendingIsMeaningful)
-  const clientName = useAppStore(s => s.clientName)
+  const getItems        = useAppStore(s => s.getItems)
+  const getShot         = useAppStore(s => s.getShot)
+  const getNotShot      = useAppStore(s => s.getNotShot)
+  const clientName      = useAppStore(s => s.clientName)
 
-  const shoot = getActiveShoot()
-  const items = getItems()
-  const received = getReceived()
-  const dispatched = getDispatched()
-  const pending = getPending()
-  const shot = getShot()
-  const notShot = getNotShot()
-  const meaningful = pendingIsMeaningful()
-  const total = items.length
+  const shoot      = getActiveShoot()
+  const items      = getItems()
+  const shot       = getShot()
+  const notShot    = getNotShot()
+  const total      = items.length
   const notRequired = items.filter(i => i.shotStatus === 'notRequired').length
+
+  // Custody breakdown
+  const atStudio    = items.filter(i => i.custodyLocation === 'at_studio').length
+  const withClient  = items.filter(i => i.custodyLocation === 'with_client').length
+  const inTransit   = items.filter(i => i.custodyLocation === 'in_transit').length
+  const dispatched  = items.filter(i => i.custodyLocation === 'dispatched_to_client').length
+
+  // "In the studio flow" = everything except still with client
+  const inFlow = atStudio + inTransit + dispatched
 
   // Angle completion stats
   const itemsWithAngles = items.filter(i => i.requiredAngles.length > 0)
@@ -33,10 +34,6 @@ export default function ReportsView() {
     i.completedAngles.length > 0 &&
     !i.requiredAngles.every(a => i.completedAngles.includes(a))
   ).length
-
-  function pct(val: number) {
-    return total > 0 ? Math.round((val / total) * 100) : 0
-  }
 
   if (!shoot) {
     return (
@@ -49,6 +46,7 @@ export default function ReportsView() {
 
   return (
     <div style={{ padding: '1.5rem 2rem', maxWidth: '860px' }}>
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#111', margin: 0 }}>Dashboard</h1>
@@ -58,39 +56,55 @@ export default function ReportsView() {
         )}
       </div>
 
-      {/* KPI tiles */}
+      {/* KPI tiles — row 1: custody */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
-        <KpiTile value={total} label="Total Imported" color="#1C1C1E" />
-        <KpiTile value={received.length} label="Received" color="#2E7D32" />
-        <KpiTile value={dispatched.length} label="Dispatched" color="#1565C0" />
-        <KpiTile value={meaningful ? pending.length : 'N/A'} label={meaningful ? 'Missing' : 'Pending (N/A)'} color="#E65100" />
+        <KpiTile value={total}      label="Total Imported"  color="#1C1C1E" />
+        <KpiTile value={atStudio}   label="At Studio"       color="#2E7D32" />
+        <KpiTile value={withClient} label="With Client"     color="#E65100" />
+        <KpiTile value={inTransit}  label="In Transit"      color="#1565C0" />
       </div>
+
+      {/* KPI tiles — row 2: shot progress */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-        <KpiTile value={shot.length} label="Shot" color="#7B1FA2" />
-        <KpiTile value={notShot.length} label="Not Shot" color="#E65100" />
-        <KpiTile value={notRequired} label="Shot N/A" color="#999" />
-        {itemsWithAngles.length > 0 && <KpiTile value={`${fullyShot}/${itemsWithAngles.length}`} label="All Angles Done" color="#7B1FA2" />}
+        <KpiTile value={dispatched}    label="Dispatched"     color="#6A1B9A" />
+        <KpiTile value={shot.length}   label="Shot"           color="#7B1FA2" />
+        <KpiTile value={notShot.length} label="Not Shot"      color="#E65100" />
+        <KpiTile value={notRequired}   label="Shot N/A"       color="#999"    />
       </div>
 
       {/* Progress bars */}
       <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem' }}>
         <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '14px' }}>Progress</p>
-        <ProgressBar label="Received (in studio + dispatched)" value={received.length + dispatched.length} total={total} color="#2E7D32" />
-        <ProgressBar label="Dispatched" value={dispatched.length} total={total} color="#1565C0" />
-        <ProgressBar label="In Studio (not dispatched)" value={received.length} total={total} color="#7B1FA2" />
-        {meaningful && <ProgressBar label="Missing" value={pending.length} total={total} color="#E65100" />}
-        <ProgressBar label="Shot" value={shot.length} total={total} color="#7B1FA2" />
+
+        <ProgressBar label="In studio flow (at studio + in transit + dispatched)" value={inFlow}     total={total} color="#2E7D32" />
+        <ProgressBar label="At Studio"                                             value={atStudio}   total={total} color="#2E7D32" />
+        <ProgressBar label="In Transit"                                            value={inTransit}  total={total} color="#1565C0" />
+        <ProgressBar label="Dispatched to Client"                                  value={dispatched} total={total} color="#6A1B9A" />
+        <ProgressBar label="Shot"                                                  value={shot.length} total={total} color="#7B1FA2" />
+
         {itemsWithAngles.length > 0 && (
           <>
-            <ProgressBar label="All angles complete" value={fullyShot} total={itemsWithAngles.length} color="#7B1FA2" />
-            <ProgressBar label="Partially shot" value={partiallyShot} total={itemsWithAngles.length} color="#E65100" />
+            <ProgressBar label="All angles complete" value={fullyShot}      total={itemsWithAngles.length} color="#7B1FA2" />
+            <ProgressBar label="Partially shot"      value={partiallyShot}  total={itemsWithAngles.length} color="#E65100" />
           </>
         )}
       </div>
 
+      {/* Angle completion detail */}
+      {itemsWithAngles.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '12px' }}>Angle Tracking</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            <KpiTile value={`${fullyShot}/${itemsWithAngles.length}`}    label="All Angles Done"    color="#7B1FA2" />
+            <KpiTile value={partiallyShot}                               label="Partially Shot"     color="#E65100" />
+            <KpiTile value={itemsWithAngles.length - fullyShot - partiallyShot} label="Not Started" color="#999" />
+          </div>
+        </div>
+      )}
+
       {/* Drop breakdown */}
       {shoot.drops.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+        <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem' }}>
           <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '12px' }}>Drops / Batches</p>
           {shoot.drops.map(drop => (
             <div key={drop.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 0', borderBottom: '1px solid #F5F5F5' }}>
@@ -123,8 +137,7 @@ function KpiTile({ value, label, color }: { value: number | string; label: strin
 }
 
 function ProgressBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
-  const frac = total > 0 ? value / total : 0
-  const pct = Math.round(frac * 100)
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0
   return (
     <div style={{ marginBottom: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>

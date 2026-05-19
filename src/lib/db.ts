@@ -1,16 +1,14 @@
 // StockShot — Database operations
-// Items are now stored as individual rows in stock_items table
-// Shoots store metadata only (name, drops, lookOrder, clientId)
 
 import { supabase } from './supabase'
-import { Shoot, StockItem, Client } from '../types'
+import { Shoot, StockItem, Client, CustodyLocation, CustodyEvent } from '../types'
 
 // ── Shoots ────────────────────────────────────────────────────────────────────
 
 export async function fetchShoots(orgId: string): Promise<Omit<Shoot, 'items'>[]> {
   const { data, error } = await supabase
     .from('shoots')
-    .select('id, name, client_id, created_at, updated_at, drops, look_order, deleted_at')
+    .select('id, name, client_id, created_at, updated_at, drops, look_order, deleted_at, is_unassigned')
     .eq('org_id', orgId)
     .order('updated_at', { ascending: false })
 
@@ -24,7 +22,8 @@ export async function fetchShoots(orgId: string): Promise<Omit<Shoot, 'items'>[]
     drops: row.drops ?? [],
     lookOrder: row.look_order ?? [],
     deletedAt: row.deleted_at ?? null,
-    items: [], // items fetched separately
+    isUnassigned: row.is_unassigned ?? false,
+    items: [],
   }))
 }
 
@@ -48,6 +47,7 @@ export async function fetchShootWithItems(shootId: string): Promise<Shoot | null
     drops: row.drops ?? [],
     lookOrder: row.look_order ?? [],
     deletedAt: row.deleted_at ?? null,
+    isUnassigned: row.is_unassigned ?? false,
     items,
   }
 }
@@ -56,7 +56,7 @@ export async function fetchItemsForShoot(shootId: string): Promise<StockItem[]> 
   const allItems: StockItem[] = []
   const pageSize = 1000
   let page = 0
-  
+
   while (true) {
     const { data, error } = await supabase
       .from('stock_items')
@@ -67,13 +67,13 @@ export async function fetchItemsForShoot(shootId: string): Promise<StockItem[]> 
 
     if (error) throw error
     if (!data || data.length === 0) break
-    
+
     allItems.push(...data.map(mapItemFromDB))
-    
+
     if (data.length < pageSize) break
     page++
   }
-  
+
   return allItems
 }
 
@@ -87,6 +87,7 @@ export async function upsertShootMeta(shoot: Omit<Shoot, 'items'>, orgId: string
     drops: shoot.drops,
     look_order: shoot.lookOrder,
     deleted_at: shoot.deletedAt ?? null,
+    is_unassigned: shoot.isUnassigned,
     org_id: orgId,
   }, { onConflict: 'id' })
 
@@ -94,7 +95,6 @@ export async function upsertShootMeta(shoot: Omit<Shoot, 'items'>, orgId: string
 }
 
 export async function deleteShoot(shootId: string): Promise<void> {
-  // Delete items first, then shoot
   await supabase.from('stock_items').delete().eq('shoot_id', shootId)
   const { error } = await supabase.from('shoots').delete().eq('id', shootId)
   if (error) throw error
@@ -110,23 +110,36 @@ export async function upsertItem(item: StockItem, shootId: string, orgId: string
 export async function upsertItems(items: StockItem[], shootId: string, orgId: string): Promise<void> {
   if (!items.length) return
   const rows = items.map(i => mapItemToDB(i, shootId, orgId))
-  // Batch in chunks of 500 to avoid request size limits
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await supabase.from('stock_items').upsert(rows.slice(i, i + 500), { onConflict: 'id' })
     if (error) throw error
   }
 }
 
+export async function updateItemCustody(
+  itemId: string,
+  updates: {
+    custodyLocation: CustodyLocation
+    custodyHistory: CustodyEvent[]
+    lastScannedAt: string
+    lastScannedBy: string
+  }
+): Promise<void> {
+  const { error } = await supabase.from('stock_items').update({
+    custody_location: updates.custodyLocation,
+    custody_history: updates.custodyHistory,
+    last_scanned_at: updates.lastScannedAt,
+    last_scanned_by: updates.lastScannedBy,
+  }).eq('id', itemId)
+  if (error) throw error
+}
+
 export async function updateItemStatus(
   itemId: string,
-  updates: Partial<Pick<StockItem, 'status' | 'shotStatus' | 'receivedAt' | 'dispatchedAt' | 'dispatchedTo' | 'shotAt' | 'completedAngles' | 'looks' | 'notes' | 'productType' | 'requiredAngles'>>
+  updates: Partial<Pick<StockItem, 'shotStatus' | 'shotAt' | 'completedAngles' | 'looks' | 'notes' | 'productType' | 'requiredAngles'>>
 ): Promise<void> {
-  const dbUpdates: Record<string, any> = {}
-  if (updates.status !== undefined) dbUpdates.status = updates.status
+  const dbUpdates: Record<string, unknown> = {}
   if (updates.shotStatus !== undefined) dbUpdates.shot_status = updates.shotStatus
-  if (updates.receivedAt !== undefined) dbUpdates.received_at = updates.receivedAt
-  if (updates.dispatchedAt !== undefined) dbUpdates.dispatched_at = updates.dispatchedAt
-  if (updates.dispatchedTo !== undefined) dbUpdates.dispatched_to = updates.dispatchedTo
   if (updates.shotAt !== undefined) dbUpdates.shot_at = updates.shotAt
   if (updates.completedAngles !== undefined) dbUpdates.completed_angles = updates.completedAngles
   if (updates.looks !== undefined) dbUpdates.looks = updates.looks
@@ -190,15 +203,15 @@ function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
     qr_code_value: item.qrCodeValue,
     description: item.description,
     extra_fields: item.extraFields,
-    status: item.status,
+    custody_location: item.custodyLocation,
+    custody_history: item.custodyHistory,
+    last_scanned_at: item.lastScannedAt,
+    last_scanned_by: item.lastScannedBy,
     shot_status: item.shotStatus,
     product_type: item.productType,
     required_angles: item.requiredAngles,
     completed_angles: item.completedAngles,
     looks: item.looks,
-    received_at: item.receivedAt,
-    dispatched_at: item.dispatchedAt,
-    dispatched_to: item.dispatchedTo,
     shot_at: item.shotAt,
     notes: item.notes,
   }
@@ -212,15 +225,15 @@ function mapItemFromDB(row: any): StockItem {
     qrCodeValue: row.qr_code_value,
     description: row.description ?? '',
     extraFields: row.extra_fields ?? {},
-    status: row.status,
+    custodyLocation: row.custody_location ?? 'with_client',
+    custodyHistory: row.custody_history ?? [],
+    lastScannedAt: row.last_scanned_at ?? null,
+    lastScannedBy: row.last_scanned_by ?? null,
     shotStatus: row.shot_status,
     productType: row.product_type ?? null,
     requiredAngles: row.required_angles ?? [],
     completedAngles: row.completed_angles ?? [],
     looks: row.looks ?? [],
-    receivedAt: row.received_at ?? null,
-    dispatchedAt: row.dispatched_at ?? null,
-    dispatchedTo: row.dispatched_to ?? '',
     shotAt: row.shot_at ?? null,
     notes: row.notes ?? '',
     dropId: row.drop_id ?? null,

@@ -67,7 +67,7 @@ export async function exportStockListPDF(items: StockItem[]): Promise<void> {
     doc.text(`${i + 1}`, 16, y)
     doc.text(item.styleNumber.slice(0, 18), 26, y)
     doc.text(item.sku.slice(0, 16), 90, y)
-    doc.text(item.status, 140, y)
+    doc.text(item.custodyLocation, 140, y)
     doc.text(item.shotStatus, 170, y)
     y += 8
   })
@@ -77,9 +77,17 @@ export async function exportStockListPDF(items: StockItem[]): Promise<void> {
 
 // ── Shot list PDF (list format, grouped by look or product type) ──────────────
 
+const CUSTODY_LABEL: Record<string, string> = {
+  with_client: 'With Client',
+  in_transit: 'In Transit',
+  at_studio: 'At Studio',
+  dispatched_to_client: 'Dispatched',
+}
+
 export async function exportShotListPDF(
   items: StockItem[],
-  groupBy: 'look' | 'productType' = 'look'
+  groupBy: 'look' | 'productType' = 'look',
+  includeLocation = false,
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
@@ -90,6 +98,14 @@ export async function exportShotListPDF(
   doc.text(`Generated: ${today()}  |  Items: ${items.length}  |  Grouped by: ${groupBy === 'look' ? 'Look' : 'Product Type'}`, 14, 28)
 
   let y = 40
+
+  // Column x positions — shift if location column included
+  const xStyle = 16
+  const xDesc  = 65
+  const xLoc   = includeLocation ? 120 : null
+  const xShot  = includeLocation ? 152 : 135
+  const xAng   = includeLocation ? 172 : 158
+  const descMax = includeLocation ? 20 : 28
 
   // Group items
   const groups: Record<string, StockItem[]> = {}
@@ -122,23 +138,25 @@ export async function exportShotListPDF(
     doc.setFontSize(8)
     doc.setFillColor(245, 245, 245)
     doc.rect(14, y - 4, 182, 7, 'F')
-    doc.text('Style Number', 16, y)
-    doc.text('Description', 65, y)
-    doc.text('Shot', 135, y)
-    doc.text('Angles', 158, y)
+    doc.text('Style Number', xStyle, y)
+    doc.text('Description', xDesc, y)
+    if (xLoc != null) doc.text('Location', xLoc, y)
+    doc.text('Shot', xShot, y)
+    doc.text('Angles', xAng, y)
     y += 8
 
     groupItems.forEach((item, i) => {
       if (y > 270) { doc.addPage(); y = 20 }
       if (i % 2 === 0) { doc.setFillColor(252, 252, 252); doc.rect(14, y - 4, 182, 7, 'F') }
       doc.setFontSize(8)
-      doc.text(item.styleNumber.slice(0, 18), 16, y)
-      doc.text((item.description || '—').slice(0, 28), 65, y)
-      doc.text(item.shotStatus === 'shot' ? '✓ Shot' : item.shotStatus === 'notRequired' ? 'N/A' : 'Not Shot', 135, y)
+      doc.text(item.styleNumber.slice(0, 18), xStyle, y)
+      doc.text((item.description || '—').slice(0, descMax), xDesc, y)
+      if (xLoc != null) doc.text((CUSTODY_LABEL[item.custodyLocation] ?? item.custodyLocation).slice(0, 12), xLoc, y)
+      doc.text(item.shotStatus === 'shot' ? '✓ Shot' : item.shotStatus === 'notRequired' ? 'N/A' : 'Not Shot', xShot, y)
       const angleStr = item.requiredAngles.length > 0
         ? `${item.completedAngles.length}/${item.requiredAngles.length}`
         : '—'
-      doc.text(angleStr, 158, y)
+      doc.text(angleStr, xAng, y)
       y += 7
     })
     y += 6

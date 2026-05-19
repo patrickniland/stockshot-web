@@ -7,9 +7,9 @@ import { persist } from 'zustand/middleware'
 import {
   Client, Shoot, StockItem, Drop,
   ScanFeedback, FeedbackType,
-  ItemStatus, ShotStatus,
+  ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem } from '../lib/db'
 
 interface AppStore {
   clients: Client[]
@@ -22,24 +22,34 @@ interface AppStore {
   currentIntakeLook: number
   markShotOnScanIn: boolean
 
+  // Custody UI state (persisted)
+  scanInLocation: CustodyLocation
+  scanOutLocation: CustodyLocation
+  currentOperator: string
+  shotListLocationFilter: CustodyLocation | 'all'
+
   getActiveShoot: () => Shoot | null
   getItems: () => StockItem[]
-  getPending: () => StockItem[]
-  getReceived: () => StockItem[]
-  getDispatched: () => StockItem[]
   getShot: () => StockItem[]
   getNotShot: () => StockItem[]
-  pendingIsMeaningful: () => boolean
   clientName: (clientId: string | null) => string | null
   getClient: (clientId: string | null) => Client | null
   getActiveShoots: () => Shoot[]
   getTrashedShoots: () => Shoot[]
+  findItemAcrossShoots: (itemId: string) => { item: StockItem; shootId: string } | null
+
+  // Legacy selectors — kept during transition, removed in Phase 6
+  getPending: () => StockItem[]
+  getReceived: () => StockItem[]
+  getDispatched: () => StockItem[]
+  pendingIsMeaningful: () => boolean
 
   addClient: (client: Client) => void
   updateClient: (client: Client) => void
   deleteClient: (clientId: string) => void
 
   addShoot: (shoot: Shoot) => void
+  addShootToList: (shoot: Shoot) => void
   switchToShoot: (shoot: Shoot) => void
   softDeleteShoot: (shoot: Shoot) => void
   restoreShoot: (shoot: Shoot) => void
@@ -57,6 +67,14 @@ interface AppStore {
   toggleAngle: (itemId: string, angle: string) => void
   bulkAssignProductType: (itemIds: string[], productType: string) => void
 
+  // Custody actions
+  setCustody: (itemId: string, location: CustodyLocation, operator: string, shootId?: string, notes?: string) => void
+  bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string) => void
+  moveItemsToShoot: (itemIds: string[], targetShootId: string) => void
+  addItemToShoot: (item: StockItem, shootId: string) => void
+  restoreItemState: (itemId: string, updates: Partial<StockItem>) => void
+
+  // Legacy scan actions — kept during transition, replaced in Phase 3/4
   scanIn: (sku: string) => void
   scanOut: (sku: string, to: string) => void
 
@@ -67,6 +85,10 @@ interface AppStore {
   setMarkShotOnScanIn: (val: boolean) => void
   setCurrentIntakeLook: (val: number) => void
   setLastScanFeedback: (val: ScanFeedback | null) => void
+  setScanInLocation: (val: CustodyLocation) => void
+  setScanOutLocation: (val: CustodyLocation) => void
+  setCurrentOperator: (val: string) => void
+  setShotListLocationFilter: (val: CustodyLocation | 'all') => void
 }
 
 // ── Barcode normalisation ─────────────────────────────────────────────────────
@@ -110,6 +132,10 @@ const useAppStore = create<AppStore>()(
       lastScanFeedback: null,
       currentIntakeLook: 0,
       markShotOnScanIn: false,
+      scanInLocation: 'at_studio',
+      scanOutLocation: 'in_transit',
+      currentOperator: '',
+      shotListLocationFilter: 'at_studio',
 
       // ── Derived ───────────────────────────────────────────
       getActiveShoot: () => {
@@ -117,13 +143,8 @@ const useAppStore = create<AppStore>()(
         return savedShoots.find(s => s.id === activeShootId) ?? null
       },
       getItems: () => get().getActiveShoot()?.items ?? [],
-      getPending: () => get().getItems().filter(i => i.status === 'pending'),
-      getReceived: () => get().getItems().filter(i => i.status === 'received'),
-      getDispatched: () => get().getItems().filter(i => i.status === 'dispatched'),
       getShot: () => get().getItems().filter(i => i.shotStatus === 'shot'),
       getNotShot: () => get().getItems().filter(i => i.shotStatus === 'notShot'),
-      pendingIsMeaningful: () =>
-        get().getActiveShoot()?.drops.some(d => d.importMode === 'jobList') ?? false,
       clientName: (id) => id ? (get().clients.find(c => c.id === id)?.name ?? null) : null,
       getClient: (id) => id ? (get().clients.find(c => c.id === id) ?? null) : null,
       getActiveShoots: () => get().savedShoots.filter(s => !s.deletedAt),
@@ -131,15 +152,25 @@ const useAppStore = create<AppStore>()(
         const ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
         return get().savedShoots.filter(s => s.deletedAt && s.deletedAt > ago)
       },
+      findItemAcrossShoots: (itemId) => {
+        for (const shoot of get().savedShoots) {
+          const item = shoot.items.find(i => i.id === itemId)
+          if (item) return { item, shootId: shoot.id }
+        }
+        return null
+      },
+
+      // Legacy selectors
+      getPending: () => get().getItems().filter(i => i.custodyLocation === 'with_client'),
+      getReceived: () => get().getItems().filter(i => i.custodyLocation === 'at_studio'),
+      getDispatched: () => get().getItems().filter(i => i.custodyLocation === 'dispatched_to_client'),
+      pendingIsMeaningful: () =>
+        get().getActiveShoot()?.drops.some(d => d.importMode === 'jobList') ?? false,
 
       // ── Clients ───────────────────────────────────────────
       addClient: (client) => set(s => ({ clients: [...s.clients, client] })),
       updateClient: (client) => set(s => {
-        // Update client
         const clients = s.clients.map(c => c.id === client.id ? client : c)
-
-        // Auto-assign angles to all items in shoots for this client
-        // Only updates items that have a matching product type
         const savedShoots = s.savedShoots.map(shoot => {
           if (shoot.clientId !== client.id) return shoot
           const items = shoot.items.map(item => {
@@ -149,25 +180,34 @@ const useAppStore = create<AppStore>()(
               p.aliases?.some(a => a.toLowerCase() === item.productType!.toLowerCase())
             )
             if (!pt) return item
-            // Only update if angles have changed
             const newAngles = pt.requiredAngles.map(a => a.name)
             if (JSON.stringify(newAngles) === JSON.stringify(item.requiredAngles)) return item
             return { ...item, requiredAngles: newAngles }
           })
           return { ...shoot, items, updatedAt: new Date().toISOString() }
         })
-
         return { clients, savedShoots }
       }),
-      deleteClient: (clientId) => set(s => ({
-        clients: s.clients.filter(c => c.id !== clientId),
-        deletedClientIds: [...s.deletedClientIds, clientId],
-      })),
+      deleteClient: (clientId) => set(s => {
+        const unassignedIds = s.savedShoots
+          .filter(sh => sh.clientId === clientId && sh.isUnassigned)
+          .map(sh => sh.id)
+        return {
+          clients: s.clients.filter(c => c.id !== clientId),
+          deletedClientIds: [...s.deletedClientIds, clientId],
+          savedShoots: s.savedShoots.filter(sh => !(sh.clientId === clientId && sh.isUnassigned)),
+          deletedShootIds: [...s.deletedShootIds, ...unassignedIds],
+        }
+      }),
 
       // ── Shoots ────────────────────────────────────────────
       addShoot: (shoot) => set(s => ({
         savedShoots: [...s.savedShoots, { ...shoot, deletedAt: null }],
         activeShootId: shoot.id,
+      })),
+
+      addShootToList: (shoot) => set(s => ({
+        savedShoots: [...s.savedShoots, { ...shoot, deletedAt: null }],
       })),
 
       switchToShoot: (shoot) => set({ activeShootId: shoot.id, currentIntakeLook: 0 }),
@@ -318,15 +358,128 @@ const useAppStore = create<AppStore>()(
         )
       },
 
-      // ── Scan In ───────────────────────────────────────────
+      // ── Custody actions ───────────────────────────────────
+      setCustody: (itemId, location, operator, shootId, notes) => {
+        const { savedShoots } = get()
+        const now = new Date().toISOString()
+
+        let foundShootId = shootId ?? null
+        let foundItem: StockItem | null = null
+
+        for (const shoot of savedShoots) {
+          const item = shoot.items.find(i => i.id === itemId)
+          if (item) {
+            foundItem = item
+            if (!foundShootId) foundShootId = shoot.id
+            break
+          }
+        }
+        if (!foundItem || !foundShootId) return
+
+        const event: CustodyEvent = {
+          location,
+          timestamp: now,
+          operator,
+          shoot_id: foundShootId,
+          ...(notes ? { notes } : {}),
+        }
+
+        const updatedItem: StockItem = {
+          ...foundItem,
+          custodyLocation: location,
+          custodyHistory: [...foundItem.custodyHistory, event],
+          lastScannedAt: now,
+          lastScannedBy: operator,
+        }
+
+        set({
+          savedShoots: savedShoots.map(shoot =>
+            shoot.id === foundShootId
+              ? { ...shoot, items: shoot.items.map(i => i.id === itemId ? updatedItem : i) }
+              : shoot
+          ),
+        })
+
+        updateItemCustody(itemId, {
+          custodyLocation: location,
+          custodyHistory: updatedItem.custodyHistory,
+          lastScannedAt: now,
+          lastScannedBy: operator,
+        }).catch(e => console.error('[Sync] setCustody error:', e))
+      },
+
+      bulkSetCustody: (itemIds, location, operator) => {
+        itemIds.forEach(id => get().setCustody(id, location, operator))
+      },
+
+      moveItemsToShoot: (itemIds, targetShootId) => {
+        const { savedShoots, orgId } = get()
+        if (!orgId) return
+
+        const movedItems: StockItem[] = []
+
+        // Remove items from their current shoots
+        const withItemsRemoved = savedShoots.map(shoot => {
+          const toMove = shoot.items.filter(i => itemIds.includes(i.id))
+          if (toMove.length === 0) return shoot
+          movedItems.push(...toMove.map(i => ({ ...i, looks: [] })))
+          return { ...shoot, items: shoot.items.filter(i => !itemIds.includes(i.id)) }
+        })
+
+        // Add items to target shoot
+        const updatedShoots = withItemsRemoved.map(shoot =>
+          shoot.id === targetShootId
+            ? { ...shoot, items: [...shoot.items, ...movedItems] }
+            : shoot
+        )
+
+        set({ savedShoots: updatedShoots })
+
+        movedItems.forEach(item => {
+          upsertItem(item, targetShootId, orgId)
+            .catch(e => console.error('[Sync] moveItemsToShoot error:', e))
+        })
+      },
+
+      addItemToShoot: (item, shootId) => {
+        const { savedShoots, orgId } = get()
+        if (!orgId) return
+        set({
+          savedShoots: savedShoots.map(shoot =>
+            shoot.id === shootId
+              ? { ...shoot, items: [...shoot.items, item], updatedAt: new Date().toISOString() }
+              : shoot
+          ),
+        })
+        upsertItem(item, shootId, orgId)
+          .catch(e => console.error('[Sync] addItemToShoot error:', e))
+      },
+
+      restoreItemState: (itemId, updates) => {
+        const { savedShoots } = get()
+        set({
+          savedShoots: savedShoots.map(shoot => ({
+            ...shoot,
+            items: shoot.items.map(i => i.id === itemId ? { ...i, ...updates } : i),
+          })),
+        })
+        if (updates.custodyLocation !== undefined) {
+          updateItemCustody(itemId, {
+            custodyLocation: updates.custodyLocation,
+            custodyHistory: updates.custodyHistory ?? [],
+            lastScannedAt: updates.lastScannedAt ?? '',
+            lastScannedBy: updates.lastScannedBy ?? '',
+          }).catch(e => console.error('[Sync] restoreItemState error:', e))
+        }
+      },
+
+      // ── Legacy scan actions (transition only) ─────────────
       scanIn: (sku) => {
         const { getItems, updateShootItems, markShotOnScanIn, currentIntakeLook } = get()
         const items = getItems()
         const item = findItem(items, sku)
 
         if (!item) { set({ lastScanFeedback: fb('notFound', 'Item not found', sku) }); return }
-        if (item.status === 'received') { set({ lastScanFeedback: fb('alreadyReceived', 'Already scanned in', sku) }); return }
-        if (item.status === 'dispatched') { set({ lastScanFeedback: fb('alreadyDispatched', 'Already dispatched', sku) }); return }
 
         const now = new Date().toISOString()
         const looks = currentIntakeLook > 0
@@ -335,8 +488,9 @@ const useAppStore = create<AppStore>()(
 
         const updatedItem: StockItem = {
           ...item,
-          status: 'received' as ItemStatus,
-          receivedAt: now,
+          custodyLocation: 'at_studio',
+          lastScannedAt: now,
+          lastScannedBy: '',
           looks,
           shotStatus: markShotOnScanIn ? 'shot' as ShotStatus : item.shotStatus,
           shotAt: markShotOnScanIn ? now : item.shotAt,
@@ -346,41 +500,36 @@ const useAppStore = create<AppStore>()(
         updateShootItems(items.map(i => i.id === item.id ? updatedItem : i))
         set({ lastScanFeedback: fb('success', markShotOnScanIn ? 'Received + Shot' : 'Received', sku) })
 
-        // Save immediately to Supabase — hybrid sync
         updateItemStatus(item.id, {
-          status: updatedItem.status,
-          receivedAt: updatedItem.receivedAt,
-          looks: updatedItem.looks,
           shotStatus: updatedItem.shotStatus,
           shotAt: updatedItem.shotAt,
+          looks: updatedItem.looks,
           completedAngles: updatedItem.completedAngles,
         }).catch(e => console.error('[Sync] scanIn error:', e))
       },
 
-      // ── Scan Out ──────────────────────────────────────────
-      scanOut: (sku, to) => {
+      scanOut: (sku, _to) => {
         const { getItems, updateShootItems } = get()
         const items = getItems()
         const item = findItem(items, sku)
 
         if (!item) { set({ lastScanFeedback: fb('notFound', 'Item not found', sku) }); return }
-        if (item.status === 'dispatched') { set({ lastScanFeedback: fb('alreadyDispatched', 'Already dispatched', sku) }); return }
-        if (item.status === 'pending') { set({ lastScanFeedback: fb('notYetReceived', 'Not yet received — scan in first', sku) }); return }
 
-        const dispatchedItem = {
+        const now = new Date().toISOString()
+        const updatedItem: StockItem = {
           ...item,
-          status: 'dispatched' as ItemStatus,
-          dispatchedAt: new Date().toISOString(),
-          dispatchedTo: to,
+          custodyLocation: 'dispatched_to_client',
+          lastScannedAt: now,
+          lastScannedBy: '',
         }
-        updateShootItems(items.map(i => i.id === item.id ? dispatchedItem : i))
-        set({ lastScanFeedback: fb('success', `Dispatched to ${to}`, sku) })
+        updateShootItems(items.map(i => i.id === item.id ? updatedItem : i))
+        set({ lastScanFeedback: fb('success', 'Dispatched', sku) })
 
-        // Save immediately to Supabase — hybrid sync
-        updateItemStatus(item.id, {
-          status: dispatchedItem.status,
-          dispatchedAt: dispatchedItem.dispatchedAt,
-          dispatchedTo: dispatchedItem.dispatchedTo,
+        updateItemCustody(item.id, {
+          custodyLocation: 'dispatched_to_client',
+          custodyHistory: updatedItem.custodyHistory,
+          lastScannedAt: now,
+          lastScannedBy: '',
         }).catch(e => console.error('[Sync] scanOut error:', e))
       },
 
@@ -392,15 +541,22 @@ const useAppStore = create<AppStore>()(
       setMarkShotOnScanIn: (val) => set({ markShotOnScanIn: val }),
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
       setLastScanFeedback: (val) => set({ lastScanFeedback: val }),
+      setScanInLocation: (val) => set({ scanInLocation: val }),
+      setScanOutLocation: (val) => set({ scanOutLocation: val }),
+      setCurrentOperator: (val) => set({ currentOperator: val }),
+      setShotListLocationFilter: (val) => set({ shotListLocationFilter: val }),
     }),
     {
-      name: 'stockshot-v1',
-      // Only persist session prefs — Supabase is source of truth for data
+      name: 'stockshot-v2',
       partialize: (s) => ({
         activeShootId: s.activeShootId,
         orgId: s.orgId,
         markShotOnScanIn: s.markShotOnScanIn,
         currentIntakeLook: s.currentIntakeLook,
+        scanInLocation: s.scanInLocation,
+        scanOutLocation: s.scanOutLocation,
+        currentOperator: s.currentOperator,
+        shotListLocationFilter: s.shotListLocationFilter,
       }),
     }
   )

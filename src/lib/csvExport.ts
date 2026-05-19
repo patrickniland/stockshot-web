@@ -24,13 +24,26 @@ function download(content: string, filename: string) {
 }
 
 export function exportStockListCSV(items: StockItem[]) {
-  const headers = ['Style Number', 'SKU', 'Description', 'Status', 'Shot Status', 'Product Type', 'Received At', 'Dispatched To']
+  const headers = ['Style Number', 'SKU', 'Description', 'Custody Location', 'Last Scanned At', 'Last Scanned By', 'Shot Status', 'Product Type']
   const rows = items.map(i => [
-    i.styleNumber, i.sku, i.description, i.status,
+    i.styleNumber, i.sku, i.description,
+    i.custodyLocation,
+    i.lastScannedAt ?? '', i.lastScannedBy ?? '',
     i.shotStatus, i.productType ?? '',
-    i.receivedAt ?? '', i.dispatchedTo,
   ].map(escape).join(','))
   download([headers.join(','), ...rows].join('\n'), `StockShot_StockList_${today()}.csv`)
+}
+
+export function exportDetailedStockListCSV(items: StockItem[]) {
+  const headers = ['Style Number', 'SKU', 'Description', 'Custody Location', 'Last Scanned At', 'Last Scanned By', 'Shot Status', 'Product Type', 'Custody History']
+  const rows = items.map(i => [
+    i.styleNumber, i.sku, i.description,
+    i.custodyLocation,
+    i.lastScannedAt ?? '', i.lastScannedBy ?? '',
+    i.shotStatus, i.productType ?? '',
+    JSON.stringify(i.custodyHistory),
+  ].map(escape).join(','))
+  download([headers.join(','), ...rows].join('\n'), `StockShot_StockList_Detailed_${today()}.csv`)
 }
 
 export function exportMissingItemsCSV(items: StockItem[]) {

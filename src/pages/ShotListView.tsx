@@ -15,6 +15,8 @@ export default function ShotListView() {
   const [groupBy, setGroupBy] = useState<'look' | 'productType' | 'none'>('look')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showLabelModal, setShowLabelModal] = useState(false)
+  const [showListPdfModal, setShowListPdfModal] = useState(false)
+  const [listPdfIncludeLocation, setListPdfIncludeLocation] = useState(false)
   const [labelOptions, setLabelOptions] = useState<LabelOptions>({
     perRow: 4,
     groupBy: 'look',
@@ -33,18 +35,22 @@ export default function ShotListView() {
   const storeUpdateItem = useAppStore(s => s.updateItem)
   const reorderLook = useAppStore(s => s.reorderLook)
   const clients = useAppStore(s => s.clients)
+  const shotListLocationFilter = useAppStore(s => s.shotListLocationFilter)
+  const setShotListLocationFilter = useAppStore(s => s.setShotListLocationFilter)
 
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const allItems = shoot?.items ?? []
-  const visibleItems = allItems.filter(i =>
-    i.status === 'received' || i.status === 'dispatched' || i.shotStatus === 'shot'
-  )
+
+  // Location filter (applied first; 'all' shows everything)
+  const locationFiltered = shotListLocationFilter === 'all'
+    ? allItems
+    : allItems.filter(i => i.custodyLocation === shotListLocationFilter)
 
   // Get client product types for assignment
   const client = clients.find(c => c.id === shoot?.clientId) ?? null
   const productTypes = client?.productTypes ?? []
 
-  const filtered = visibleItems.filter(i => {
+  const filtered = locationFiltered.filter(i => {
     if (filter === 'notShot' && i.shotStatus !== 'notShot') return false
     if (filter === 'shot' && i.shotStatus !== 'shot') return false
     if (filter === 'partial') {
@@ -130,6 +136,29 @@ export default function ShotListView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
+      {/* Location filter bar */}
+      <div style={{ padding: '8px 16px', background: '#fff', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
+        {([
+          { value: 'all',                  label: 'All' },
+          { value: 'at_studio',            label: '🏠 At Studio' },
+          { value: 'with_client',          label: '📦 With Client' },
+          { value: 'in_transit',           label: '🚚 In Transit' },
+          { value: 'dispatched_to_client', label: '✅ Dispatched' },
+        ] as const).map(opt => (
+          <button key={opt.value} onClick={() => setShotListLocationFilter(opt.value)} style={{
+            padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
+            border: `1.5px solid ${shotListLocationFilter === opt.value ? '#1565C0' : '#E0E0E0'}`,
+            background: shotListLocationFilter === opt.value ? '#E3F2FD' : '#F9F9F9',
+            color: shotListLocationFilter === opt.value ? '#1565C0' : '#666',
+            cursor: 'pointer',
+          }}>
+            {opt.label}
+          </button>
+        ))}
+        <span style={{ fontSize: '11px', color: '#999', marginLeft: 'auto' }}>{locationFiltered.length} items</span>
+      </div>
+
       {/* Toolbar */}
       <div style={{ padding: '10px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '16px', fontWeight: 700, color: '#111' }}>Shot List</span>
@@ -158,7 +187,7 @@ export default function ShotListView() {
         </select>
 
         <button onClick={() => exportShotListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>CSV</button>
-        <button onClick={() => exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>List PDF</button>
+        <button onClick={() => setShowListPdfModal(true)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>List PDF</button>
         <button onClick={() => setShowLabelModal(true)} style={{ padding: '6px 10px', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>🏷 Labels PDF</button>
         <button onClick={() => setShowLookBuilder(true)} style={{ padding: '6px 10px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>👁 Look Builder</button>
       </div>
@@ -199,6 +228,7 @@ export default function ShotListView() {
                 index={i}
                 expanded={expandedId === item.id}
                 productTypes={productTypes.map(p => p.name)}
+                locationFilter={shotListLocationFilter}
                 onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                 onAngleToggle={angle => toggleAngle(item.id, angle)}
                 onShotStatusChange={s => updateItem(item.id, { shotStatus: s })}
@@ -218,6 +248,35 @@ export default function ShotListView() {
           onAddLook={() => bumpLook()}
           onClose={() => setShowLookBuilder(false)}
         />
+      )}
+
+      {/* List PDF modal */}
+      {showListPdfModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', width: '340px', maxWidth: '90vw' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1rem', color: '#111' }}>List PDF Options</h2>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', cursor: 'pointer', fontSize: '13px', color: '#444' }}>
+              <input type="checkbox" checked={listPdfIncludeLocation} onChange={e => setListPdfIncludeLocation(e.target.checked)} />
+              Include Location column
+            </label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={async () => {
+                  setExporting(true)
+                  try { await exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy, listPdfIncludeLocation) }
+                  finally { setExporting(false); setShowListPdfModal(false) }
+                }}
+                disabled={exporting}
+                style={{ flex: 1, padding: '10px', background: exporting ? '#E0E0E0' : '#424242', color: exporting ? '#999' : '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: exporting ? 'default' : 'pointer' }}
+              >
+                {exporting ? 'Generating...' : `Export ${filtered.length} items`}
+              </button>
+              <button onClick={() => setShowListPdfModal(false)} style={{ padding: '10px 16px', background: '#F5F5F5', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#444' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Label export modal */}
@@ -297,11 +356,19 @@ export default function ShotListView() {
   )
 }
 
-function ShotRow({ item, index, expanded, productTypes, onToggle, onAngleToggle, onShotStatusChange, onAssignProductType }: {
+const CUSTODY_ICON: Record<string, string> = {
+  with_client: '📦',
+  in_transit: '🚚',
+  at_studio: '🏠',
+  dispatched_to_client: '✅',
+}
+
+function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle, onAngleToggle, onShotStatusChange, onAssignProductType }: {
   item: StockItem
   index: number
   expanded: boolean
   productTypes: string[]
+  locationFilter: string
   onToggle: () => void
   onAngleToggle: (angle: string) => void
   onShotStatusChange: (s: ShotStatus) => void
@@ -320,7 +387,10 @@ function ShotRow({ item, index, expanded, productTypes, onToggle, onAngleToggle,
         <span style={{ width: '28px', fontSize: '11px', color: '#999', textAlign: 'center', flexShrink: 0 }}>{index + 1}</span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '11px', opacity: locationFilter === 'all' ? 0.4 : 0.9, flexShrink: 0 }}>
+              {CUSTODY_ICON[item.custodyLocation] ?? ''}
+            </span>
             {item.styleNumber}
           </div>
           <div style={{ fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -35,7 +35,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const hasExtraFields = Object.keys(extraFieldOptions).length > 0
   const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
 
-  const receivedItems = receivedOnly ? items.filter(i => i.status === 'received') : items
+  const receivedItems = receivedOnly ? items.filter(i => i.custodyLocation === 'at_studio') : items
   const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i => 
     filterLook === 'none' ? i.looks.length === 0 : i.looks.includes(parseInt(filterLook))
   )
@@ -168,7 +168,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           </button>
         </div>
 
-        {/* Received only toggle + Look filter */}
+        {/* At Studio only toggle + Look filter */}
         <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button onClick={() => setReceivedOnly(!receivedOnly)} style={{
             padding: '5px 10px', borderRadius: '5px', fontSize: '11px',
@@ -176,10 +176,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
             background: receivedOnly ? '#E8F5E9' : '#F5F5F5',
             color: receivedOnly ? '#2E7D32' : '#666',
           }}>
-            {receivedOnly ? '✓ Received only' : 'All items'}
+            {receivedOnly ? '🏠 At Studio only' : 'All items'}
           </button>
           <span style={{ fontSize: '11px', color: '#aaa' }}>
-            {receivedOnly ? `${items.filter(i => i.status === 'received').length} received` : `${items.length} total`}
+            {receivedOnly ? `${items.filter(i => i.custodyLocation === 'at_studio').length} at studio` : `${items.length} total`}
           </span>
         </div>
 

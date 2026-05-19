@@ -1,30 +1,39 @@
 // StockShot — Core Types
-// Forward-planned for all phases including shot templates, client profiles, and angle tracking
 
-export type ItemStatus = 'pending' | 'received' | 'dispatched' | 'flagged'
+export type CustodyLocation = 'with_client' | 'in_transit' | 'at_studio' | 'dispatched_to_client'
+
+export interface CustodyEvent {
+  location: CustodyLocation
+  timestamp: string  // ISO
+  operator: string
+  shoot_id: string
+  notes?: string
+}
+
+export type ItemStatus = 'pending' | 'received' | 'dispatched' | 'flagged'  // kept for transition, removed in Phase 6
 export type ShotStatus = 'notShot' | 'shot' | 'notRequired'
 export type ImportMode = 'jobList' | 'mappingReference'
-export type FeedbackType = 'success' | 'notFound' | 'alreadyReceived' | 'alreadyDispatched' | 'notYetReceived'
+export type FeedbackType = 'success' | 'notFound' | 'alreadyReceived' | 'alreadyDispatched' | 'notYetReceived' | 'alreadyAtLocation' | 'wrongShoot'
 
 // Required shot angle (e.g. Front, Back, Detail)
 export interface ShotAngle {
   id: string
-  name: string // e.g. "Front", "Back", "Detail", "Flat"
+  name: string
 }
 
 // Product type template (e.g. Tops, Footwear) — defined per client
 export interface ProductType {
   id: string
-  name: string                // e.g. "Tops"
-  aliases: string[]           // e.g. ["TOP", "01", "T"] for auto-mapping at import
-  requiredAngles: ShotAngle[] // e.g. [Front, Back, Detail]
+  name: string
+  aliases: string[]
+  requiredAngles: ShotAngle[]
 }
 
 // Client profile — reusable across shoots
 export interface Client {
   id: string
   name: string
-  productTypes: ProductType[] // shot template per product type
+  productTypes: ProductType[]
   createdAt: string
 }
 
@@ -34,7 +43,7 @@ export interface ColumnMapping {
   skuColumn: number
   qrSourceColumn: number
   descriptionColumn: number | null
-  productTypeColumn: number | null  // new — maps to product type for auto-assignment
+  productTypeColumn: number | null
   hasHeaderRow: boolean
   extraColumns: number[]
   scannableColumns: number[]
@@ -60,22 +69,27 @@ export interface StockItem {
   description: string
   extraFields: Record<string, string>
 
-  status: ItemStatus
-  shotStatus: ShotStatus       // simple overall shot status (backwards compat)
+  // Custody (replaces status/receivedAt/dispatchedAt/dispatchedTo)
+  custodyLocation: CustodyLocation
+  custodyHistory: CustodyEvent[]
+  lastScannedAt: string | null
+  lastScannedBy: string | null
 
-  // Shot angle tracking (new — for per-angle shot verification)
-  productType: string | null   // e.g. "Tops" — assigned at import or manually
-  requiredAngles: string[]     // inherited from client template, e.g. ["Front","Back","Detail"]
-  completedAngles: string[]    // ticked off during shoot, e.g. ["Front"]
-
+  shotStatus: ShotStatus
+  productType: string | null
+  requiredAngles: string[]
+  completedAngles: string[]
   looks: number[]
-  receivedAt: string | null
-  dispatchedAt: string | null
-  dispatchedTo: string
   shotAt: string | null
   notes: string
-  updatedAt?: string | null  // from Supabase server clock
+  updatedAt?: string | null
   dropId: string | null
+
+  // Legacy — optional during transition, removed in Phase 6
+  status?: ItemStatus
+  receivedAt?: string | null
+  dispatchedAt?: string | null
+  dispatchedTo?: string
 }
 
 // A named production session
@@ -88,7 +102,8 @@ export interface Shoot {
   items: StockItem[]
   drops: Drop[]
   lookOrder: number[]
-  deletedAt: string | null  // null = active, string = soft deleted
+  deletedAt: string | null
+  isUnassigned: boolean
 }
 
 // Import result from file parsing

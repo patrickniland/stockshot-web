@@ -1,41 +1,75 @@
 // StockShot — Stock List View
-// Full version: QR codes, look column, bulk product type assignment, instant state updates
 
 import { useState } from 'react'
 import useAppStore from '../store/useAppStore'
-import { StockItem, ItemStatus, ShotStatus } from '../types'
-import { exportStockListCSV } from '../lib/csvExport'
+import { StockItem, CustodyLocation, ShotStatus } from '../types'
+import { exportStockListCSV, exportDetailedStockListCSV } from '../lib/csvExport'
 import { exportStockListPDF } from '../lib/pdfExporter'
 import QRCode from '../components/QRCode'
+import ShootPicker from '../components/ShootPicker'
 
-const STATUS_COLORS: Record<ItemStatus, string> = {
-  pending: '#E65100', received: '#2E7D32', dispatched: '#1565C0', flagged: '#B71C1C',
+// ── Custody styling ───────────────────────────────────────────────────────────
+
+const CUSTODY_LABEL: Record<CustodyLocation, string> = {
+  with_client:          'With Client',
+  in_transit:           'In Transit',
+  at_studio:            'At Studio',
+  dispatched_to_client: 'Dispatched',
 }
-const STATUS_BG: Record<ItemStatus, string> = {
-  pending: '#FFF3E0', received: '#E8F5E9', dispatched: '#E3F2FD', flagged: '#FFEBEE',
+const CUSTODY_COLOR: Record<CustodyLocation, string> = {
+  with_client:          '#E65100',
+  in_transit:           '#1565C0',
+  at_studio:            '#2E7D32',
+  dispatched_to_client: '#6A1B9A',
 }
+const CUSTODY_BG: Record<CustodyLocation, string> = {
+  with_client:          '#FFF3E0',
+  in_transit:           '#E3F2FD',
+  at_studio:            '#E8F5E9',
+  dispatched_to_client: '#F3E5F5',
+}
+const CUSTODY_ICON: Record<CustodyLocation, string> = {
+  with_client: '📦', in_transit: '🚚', at_studio: '🏠', dispatched_to_client: '✅',
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function StockListView() {
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<ItemStatus | 'all'>('all')
+  const [custodyFilter, setCustodyFilter] = useState<CustodyLocation | 'all'>('all')
   const [sortAsc, setSortAsc] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [bulkProductType, setBulkProductType] = useState('')
 
+  // Bulk mark-at-studio
+  const [showMarkStudio, setShowMarkStudio] = useState(false)
+  const [bulkOperator, setBulkOperator] = useState('')
+
+  // Bulk move-to-shoot
+  const [moveToShootId, setMoveToShootId] = useState('')
+
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
   const updateShootItems = useAppStore(s => s.updateShootItems)
   const clients = useAppStore(s => s.clients)
+  const currentOperator = useAppStore(s => s.currentOperator)
+  const bulkSetCustody = useAppStore(s => s.bulkSetCustody)
+  const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
 
   const activeShoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const allItems = activeShoot?.items ?? []
   const client = clients.find(c => c.id === activeShoot?.clientId) ?? null
   const productTypes = client?.productTypes ?? []
 
+  // Shoots available for "Move to" (exclude current shoot and its own Unassigned)
+  const moveTargetShoots = savedShoots.filter(s =>
+    !s.deletedAt && s.id !== activeShootId && !s.isUnassigned
+  ).sort((a, b) => a.name.localeCompare(b.name))
+
   const filtered = allItems
     .filter(i => {
-      if (statusFilter !== 'all' && i.status !== statusFilter) return false
+      if (custodyFilter !== 'all' && i.custodyLocation !== custodyFilter) return false
       if (!search) return true
       const q = search.toLowerCase()
       return i.styleNumber.toLowerCase().includes(q) ||
@@ -62,23 +96,34 @@ export default function StockListView() {
   }
 
   function selectAll() {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filtered.map(i => i.id)))
-    }
+    setSelectedIds(selectedIds.size === filtered.length ? new Set() : new Set(filtered.map(i => i.id)))
   }
 
   function applyBulkProductType() {
     if (!bulkProductType || !activeShoot || selectedIds.size === 0) return
     const pt = productTypes.find(p => p.name === bulkProductType)
     const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-    const updated = activeShoot.items.map(i =>
+    updateShootItems(activeShoot.items.map(i =>
       selectedIds.has(i.id) ? { ...i, productType: bulkProductType, requiredAngles, completedAngles: [] } : i
-    )
-    updateShootItems(updated)
+    ))
     setSelectedIds(new Set())
     setBulkProductType('')
+  }
+
+  function applyMarkAtStudio() {
+    const op = bulkOperator.trim() || currentOperator
+    if (!op) return
+    bulkSetCustody([...selectedIds], 'at_studio', op)
+    setSelectedIds(new Set())
+    setShowMarkStudio(false)
+    setBulkOperator('')
+  }
+
+  function applyMoveToShoot() {
+    if (!moveToShootId || selectedIds.size === 0) return
+    moveItemsToShoot([...selectedIds], moveToShootId)
+    setSelectedIds(new Set())
+    setMoveToShootId('')
   }
 
   if (!activeShoot) {
@@ -91,12 +136,17 @@ export default function StockListView() {
     )
   }
 
+  const hasSelection = selectedIds.size > 0
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
       {/* Toolbar */}
       <div style={{ padding: '10px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '16px', fontWeight: 700, color: '#111' }}>Stock List</span>
+        {activeShoot.isUnassigned && (
+          <span style={{ fontSize: '11px', background: '#FFF3E0', color: '#E65100', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>Unassigned</span>
+        )}
         <span style={{ fontSize: '13px', color: '#666' }}>({filtered.length} of {allItems.length})</span>
         <div style={{ flex: 1 }} />
 
@@ -106,38 +156,93 @@ export default function StockListView() {
             placeholder="Search..." style={{ border: 'none', outline: 'none', fontSize: '12px', width: '140px' }} />
         </div>
 
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
+        {/* Custody filter */}
+        <select value={custodyFilter} onChange={e => setCustodyFilter(e.target.value as CustodyLocation | 'all')}
           style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
           <option value="all">All</option>
-          <option value="pending">Pending</option>
-          <option value="received">Received</option>
-          <option value="dispatched">Dispatched</option>
+          <option value="with_client">With Client</option>
+          <option value="in_transit">In Transit</option>
+          <option value="at_studio">At Studio</option>
+          <option value="dispatched_to_client">Dispatched</option>
         </select>
 
         <button onClick={() => setSortAsc(!sortAsc)} style={{ padding: '6px 10px', background: '#E0E0E0', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
           {sortAsc ? '↑' : '↓'}
         </button>
         <button onClick={() => exportStockListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>CSV</button>
+        <button onClick={() => exportDetailedStockListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }} title="CSV with full custody history">CSV+</button>
         <button onClick={() => exportStockListPDF(filtered)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>PDF</button>
       </div>
 
-      {/* Bulk assignment bar */}
-      {selectedIds.size > 0 && productTypes.length > 0 && (
-        <div style={{ padding: '8px 16px', background: '#E3F2FD', borderBottom: '1px solid #BBDEFB', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* Bulk action bar */}
+      {hasSelection && (
+        <div style={{ padding: '8px 16px', background: '#E3F2FD', borderBottom: '1px solid #BBDEFB', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#1565C0' }}>{selectedIds.size} selected</span>
-          <select value={bulkProductType} onChange={e => setBulkProductType(e.target.value)}
-            style={{ padding: '5px 8px', border: '1px solid #BBDEFB', borderRadius: '6px', fontSize: '12px', flex: 1, maxWidth: '200px' }}>
-            <option value="">Assign product type...</option>
-            {productTypes.map(pt => <option key={pt.id} value={pt.name}>{pt.name}</option>)}
-          </select>
-          <button onClick={applyBulkProductType} disabled={!bulkProductType} style={{
-            padding: '5px 14px', background: bulkProductType ? '#1565C0' : '#E0E0E0',
-            color: bulkProductType ? '#fff' : '#999', border: 'none', borderRadius: '6px',
-            fontSize: '12px', cursor: bulkProductType ? 'pointer' : 'default', fontWeight: 500,
-          }}>
-            Apply
-          </button>
-          <button onClick={() => setSelectedIds(new Set())} style={{ padding: '5px 10px', background: 'none', border: 'none', fontSize: '12px', color: '#666', cursor: 'pointer' }}>
+
+          {/* Bulk product type */}
+          {productTypes.length > 0 && (
+            <>
+              <select value={bulkProductType} onChange={e => setBulkProductType(e.target.value)}
+                style={{ padding: '5px 8px', border: '1px solid #BBDEFB', borderRadius: '6px', fontSize: '12px', maxWidth: '180px' }}>
+                <option value="">Assign type...</option>
+                {productTypes.map(pt => <option key={pt.id} value={pt.name}>{pt.name}</option>)}
+              </select>
+              <button onClick={applyBulkProductType} disabled={!bulkProductType} style={{
+                padding: '5px 12px', background: bulkProductType ? '#1565C0' : '#E0E0E0',
+                color: bulkProductType ? '#fff' : '#999', border: 'none', borderRadius: '6px',
+                fontSize: '12px', cursor: bulkProductType ? 'pointer' : 'default', fontWeight: 500,
+              }}>Apply type</button>
+            </>
+          )}
+
+          {/* Mark as at Studio */}
+          {!showMarkStudio ? (
+            <button onClick={() => { setShowMarkStudio(true); setBulkOperator(currentOperator) }} style={{
+              padding: '5px 12px', background: '#2E7D32', color: '#fff', border: 'none',
+              borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+            }}>
+              🏠 Mark as at Studio
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input
+                value={bulkOperator}
+                onChange={e => setBulkOperator(e.target.value)}
+                placeholder="Operator name..."
+                autoFocus
+                style={{ padding: '4px 8px', border: '1px solid #A5D6A7', borderRadius: '5px', fontSize: '12px', width: '130px', outline: 'none' }}
+              />
+              <button onClick={applyMarkAtStudio} disabled={!bulkOperator.trim() && !currentOperator} style={{
+                padding: '5px 10px', background: (bulkOperator.trim() || currentOperator) ? '#2E7D32' : '#E0E0E0',
+                color: (bulkOperator.trim() || currentOperator) ? '#fff' : '#999',
+                border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+              }}>Confirm</button>
+              <button onClick={() => setShowMarkStudio(false)} style={{
+                padding: '5px 8px', background: 'none', border: 'none', fontSize: '11px', color: '#666', cursor: 'pointer',
+              }}>✕</button>
+            </div>
+          )}
+
+          {/* Move to shoot (available for all shoots) */}
+          {moveTargetShoots.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShootPicker
+                shoots={moveTargetShoots}
+                value={moveToShootId}
+                onChange={setMoveToShootId}
+                placeholder="Move to shoot..."
+                style={{ padding: '5px 8px', fontSize: '12px', maxWidth: '180px', border: '1px solid #BBDEFB' }}
+              />
+              <button onClick={applyMoveToShoot} disabled={!moveToShootId} style={{
+                padding: '5px 12px', background: moveToShootId ? '#7B1FA2' : '#E0E0E0',
+                color: moveToShootId ? '#fff' : '#999', border: 'none', borderRadius: '6px',
+                fontSize: '12px', cursor: moveToShootId ? 'pointer' : 'default', fontWeight: 500,
+              }}>Move</button>
+            </div>
+          )}
+
+          <button onClick={() => { setSelectedIds(new Set()); setShowMarkStudio(false) }}
+            style={{ padding: '5px 8px', background: 'none', border: 'none', fontSize: '12px', color: '#666', cursor: 'pointer', marginLeft: 'auto' }}>
             Clear
           </button>
         </div>
@@ -152,7 +257,7 @@ export default function StockListView() {
         <span style={{ width: '120px' }}>Description</span>
         <span style={{ width: '60px' }}>Looks</span>
         <span style={{ width: '110px' }}>Type</span>
-        <span style={{ width: '120px' }}>Status</span>
+        <span style={{ width: '120px' }}>Custody</span>
         <span style={{ width: '90px' }}>Shot</span>
       </div>
 
@@ -210,20 +315,16 @@ export default function StockListView() {
                 )}
               </div>
 
-              {/* Status */}
+              {/* Custody */}
               <div style={{ width: '120px' }}>
-                <select value={item.status} onChange={e => updateItemField(item.id, { status: e.target.value as ItemStatus })}
-                  style={{
-                    fontSize: '11px', fontWeight: 600, padding: '4px 6px', borderRadius: '99px',
-                    border: `1px solid ${STATUS_COLORS[item.status]}44`,
-                    cursor: 'pointer', background: STATUS_BG[item.status], color: STATUS_COLORS[item.status],
-                    appearance: 'auto', width: '100%',
-                  }}>
-                  <option value="pending">Pending</option>
-                  <option value="received">Received</option>
-                  <option value="dispatched">Dispatched</option>
-                  <option value="flagged">Flagged</option>
-                </select>
+                <span style={{
+                  fontSize: '11px', fontWeight: 600, padding: '3px 7px', borderRadius: '99px',
+                  background: CUSTODY_BG[item.custodyLocation],
+                  color: CUSTODY_COLOR[item.custodyLocation],
+                  whiteSpace: 'nowrap',
+                }}>
+                  {CUSTODY_ICON[item.custodyLocation]} {CUSTODY_LABEL[item.custodyLocation]}
+                </span>
               </div>
 
               {/* Shot */}
@@ -242,14 +343,45 @@ export default function StockListView() {
               </div>
             </div>
 
-            {/* Expanded QR row */}
+            {/* Expanded panel */}
             {expandedId === item.id && (
-              <div style={{ padding: '12px 16px 14px 60px', background: '#F8F8F8', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <QRCode value={item.qrCodeValue} size={80} />
-                <div>
-                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>QR Value</div>
-                  <div style={{ fontSize: '12px', fontFamily: 'monospace', color: '#444' }}>{item.qrCodeValue}</div>
-                  {item.notes && <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>{item.notes}</div>}
+              <div style={{ padding: '12px 16px 16px 60px', background: '#F8F8F8', borderBottom: '1px solid #F0F0F0', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                {/* QR Code */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <QRCode value={item.qrCodeValue} size={80} />
+                  <div style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.qrCodeValue}
+                  </div>
+                </div>
+
+                {/* Custody history */}
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#666', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Custody History
+                  </div>
+                  {item.custodyHistory.length === 0 ? (
+                    <p style={{ fontSize: '11px', color: '#aaa' }}>No custody events recorded.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {item.custodyHistory.map((event, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11px' }}>
+                          <span style={{ color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {new Date(event.timestamp).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
+                            {' '}
+                            {new Date(event.timestamp).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span style={{ color: CUSTODY_COLOR[event.location] ?? '#444', fontWeight: 600 }}>
+                            {CUSTODY_ICON[event.location]} {CUSTODY_LABEL[event.location]}
+                          </span>
+                          {event.notes && <span style={{ color: '#888' }}>— {event.notes}</span>}
+                          {event.operator && <span style={{ color: '#aaa' }}>({event.operator})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {item.notes && (
+                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>{item.notes}</div>
+                  )}
                 </div>
               </div>
             )}
