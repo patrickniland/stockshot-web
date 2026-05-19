@@ -387,7 +387,7 @@ const useAppStore = create<AppStore>()(
         const updatedItem: StockItem = {
           ...foundItem,
           custodyLocation: location,
-          custodyHistory: [...foundItem.custodyHistory, event],
+          custodyHistory: [...(foundItem.custodyHistory ?? []), event],
           lastScannedAt: now,
           lastScannedBy: operator,
         }
