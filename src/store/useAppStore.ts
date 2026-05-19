@@ -135,7 +135,7 @@ const useAppStore = create<AppStore>()(
       scanInLocation: 'at_studio',
       scanOutLocation: 'in_transit',
       currentOperator: '',
-      shotListLocationFilter: 'at_studio',
+      shotListLocationFilter: 'all',
 
       // ── Derived ───────────────────────────────────────────
       getActiveShoot: () => {
@@ -556,7 +556,6 @@ const useAppStore = create<AppStore>()(
         scanInLocation: s.scanInLocation,
         scanOutLocation: s.scanOutLocation,
         currentOperator: s.currentOperator,
-        shotListLocationFilter: s.shotListLocationFilter,
       }),
     }
   )

@@ -109,9 +109,11 @@ export default function ScanInView() {
   const canScan = !!currentOperator.trim() && !!selectedShootId
 
   // Stats for the selected shoot
+  // with_client only counts items formally scanned (has history) — unscanned imports default to with_client
+  // and would otherwise make the count look non-zero before any scanning.
   const shootItems = selectedShoot?.items ?? []
   const atStudioCount = shootItems.filter(i => i.custodyLocation === 'at_studio').length
-  const withClientCount = shootItems.filter(i => i.custodyLocation === 'with_client').length
+  const withClientCount = shootItems.filter(i => i.custodyLocation === 'with_client' && (i.custodyHistory ?? []).length > 0).length
   const inTransitCount = shootItems.filter(i => i.custodyLocation === 'in_transit').length
 
   // ── Scan logic ──────────────────────────────────────────────────────────────
