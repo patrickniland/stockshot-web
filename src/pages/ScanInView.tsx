@@ -71,6 +71,7 @@ export default function ScanInView() {
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
+  const setActiveShootId = useAppStore(s => s.setActiveShootId)
   const scanInLocation = useAppStore(s => s.scanInLocation)
   const setScanInLocation = useAppStore(s => s.setScanInLocation)
   const currentOperator = useAppStore(s => s.currentOperator)
@@ -90,6 +91,11 @@ export default function ScanInView() {
   const activeShoots = savedShoots.filter(s => !s.deletedAt)
 
   const [selectedShootId, setSelectedShootId] = useState<string>(activeShootId ?? '')
+
+  function selectShoot(id: string) {
+    setSelectedShootId(id)
+    setActiveShootId(id)
+  }
 
   // Sync selectedShootId if activeShootId changes and selection becomes invalid
   useEffect(() => {
@@ -327,7 +333,7 @@ export default function ScanInView() {
           <ShootPicker
             shoots={activeShoots}
             value={selectedShootId}
-            onChange={setSelectedShootId}
+            onChange={selectShoot}
           />
         </ControlRow>
 
