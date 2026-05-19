@@ -114,6 +114,8 @@ export default function ShotListView() {
       const gi = filtered.filter(i => i.looks.includes(look))
       if (gi.length) groups.push({ name: `Look ${look}`, look, items: gi })
     })
+    const unassigned = filtered.filter(i => i.looks.length === 0)
+    if (unassigned.length) groups.push({ name: 'No Look Assigned', items: unassigned })
   } else if (groupBy === 'productType') {
     const types = [...new Set(filtered.map(i => i.productType || 'Unassigned'))]
     types.forEach(type => {
