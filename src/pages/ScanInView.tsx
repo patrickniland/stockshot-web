@@ -151,9 +151,9 @@ export default function ScanInView() {
       return
     }
 
-    // Already at this location?
-    if (foundItem.custodyLocation === scanInLocation) {
-      // Still record a scan entry as a warning but don't duplicate history
+    // Already at this location AND has been previously scanned (not just a default value)?
+    const hasHistory = (foundItem.custodyHistory ?? []).length > 0
+    if (foundItem.custodyLocation === scanInLocation && hasHistory) {
       appendFeedback('already', foundItem)
       return
     }

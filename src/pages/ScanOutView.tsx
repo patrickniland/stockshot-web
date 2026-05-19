@@ -122,8 +122,9 @@ export default function ScanOutView() {
 
     const { location: targetLocation, notes } = selectedOption
 
-    // Warn if already at target or already dispatched — but still allow
-    if (foundItem.custodyLocation === targetLocation) {
+    // Warn if already at target and has been previously scanned (not just a default value)
+    const hasHistory = (foundItem.custodyHistory ?? []).length > 0
+    if (foundItem.custodyLocation === targetLocation && hasHistory) {
       setLastScanFeedback({
         id: Date.now().toString(),
         type: 'alreadyAtLocation',
