@@ -33,15 +33,19 @@ function normaliseScan(raw: string): string {
 }
 
 function matchesBarcode(item: StockItem, raw: string): boolean {
-  const norm = normaliseScan(raw).toLowerCase()
-  const rawL = raw.toLowerCase()
-  const extras = Object.values(item.extraFields).map(v => v.toLowerCase())
-  return (
-    item.sku.toLowerCase() === rawL || item.sku.toLowerCase() === norm ||
-    item.qrCodeValue.toLowerCase() === rawL || item.qrCodeValue.toLowerCase() === norm ||
-    item.styleNumber.toLowerCase() === rawL || item.styleNumber.toLowerCase() === norm ||
-    extras.some(v => v === rawL || v === norm)
-  )
+  try {
+    const norm = normaliseScan(raw).toLowerCase()
+    const rawL = raw.toLowerCase()
+    const extras = Object.values(item.extraFields ?? {}).map(v => String(v).toLowerCase())
+    return (
+      item.sku.toLowerCase() === rawL || item.sku.toLowerCase() === norm ||
+      item.qrCodeValue.toLowerCase() === rawL || item.qrCodeValue.toLowerCase() === norm ||
+      item.styleNumber.toLowerCase() === rawL || item.styleNumber.toLowerCase() === norm ||
+      extras.some(v => v === rawL || v === norm)
+    )
+  } catch {
+    return false
+  }
 }
 
 function locationLabel(loc: CustodyLocation): string {
@@ -86,6 +90,7 @@ export default function ScanInView() {
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
   const restoreItemState = useAppStore(s => s.restoreItemState)
   const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
+  const lastScanFeedback = useAppStore(s => s.lastScanFeedback)
 
   // All non-deleted shoots for the dropdown
   const activeShoots = savedShoots.filter(s => !s.deletedAt)
@@ -209,6 +214,13 @@ export default function ScanInView() {
       },
       ...prev2,
     ].slice(0, 10))
+
+    setLastScanFeedback({
+      id: Date.now().toString(),
+      type: 'success',
+      message: markShotOnScanIn ? `${locationLabel(scanInLocation)} + Shot` : locationLabel(scanInLocation),
+      scannedValue: item.styleNumber || item.qrCodeValue,
+    })
   }
 
   function appendFeedback(type: 'already', item: StockItem) {
@@ -434,6 +446,29 @@ export default function ScanInView() {
           </button>
         </div>
       </div>
+
+      {/* Scan feedback banner */}
+      {lastScanFeedback && (
+        <div style={{
+          borderRadius: '10px',
+          padding: '14px 16px',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          background: lastScanFeedback.type === 'success' ? '#2E7D32'
+            : lastScanFeedback.type === 'alreadyAtLocation' ? '#E65100'
+            : '#B71C1C',
+        }}>
+          <span style={{ fontSize: '20px' }}>
+            {lastScanFeedback.type === 'success' ? LOCATION_ICON[scanInLocation] : '⚠'}
+          </span>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>{lastScanFeedback.message}</div>
+            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', fontFamily: 'monospace' }}>{lastScanFeedback.scannedValue}</div>
+          </div>
+        </div>
+      )}
 
       {/* Pending action: wrong shoot */}
       {pendingAction?.type === 'wrongShoot' && (
