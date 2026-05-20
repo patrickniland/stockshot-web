@@ -33,7 +33,7 @@ const CUSTODY_ICON: Record<CustodyLocation, string> = {
 
 export default function StockListView() {
   const [search, setSearch] = useState('')
-  const [custodyFilter, setCustodyFilter] = useState<CustodyLocation | 'all'>('all')
+  const [custodyFilter, setCustodyFilter] = useState<CustodyLocation | 'all' | 'mapped'>('all')
   const [sortAsc, setSortAsc] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -66,7 +66,10 @@ export default function StockListView() {
 
   const filtered = allItems
     .filter(i => {
-      if (custodyFilter !== 'all' && i.custodyLocation !== custodyFilter) return false
+      const isActive = (i.custodyHistory ?? []).length > 0
+      if (custodyFilter === 'mapped' && isActive) return false
+      if (custodyFilter !== 'all' && custodyFilter !== 'mapped' && i.custodyLocation !== custodyFilter) return false
+      if (custodyFilter !== 'all' && custodyFilter !== 'mapped' && !isActive) return false
       if (!search) return true
       const q = search.toLowerCase()
       return i.styleNumber.toLowerCase().includes(q) ||
@@ -154,9 +157,10 @@ export default function StockListView() {
         </div>
 
         {/* Custody filter */}
-        <select value={custodyFilter} onChange={e => setCustodyFilter(e.target.value as CustodyLocation | 'all')}
+        <select value={custodyFilter} onChange={e => setCustodyFilter(e.target.value as CustodyLocation | 'all' | 'mapped')}
           style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
           <option value="all">All</option>
+          <option value="mapped">Mapped (not active)</option>
           <option value="at_client">At Client</option>
           <option value="in_transit">In Transit</option>
           <option value="at_studio">At Studio</option>
@@ -312,16 +316,20 @@ export default function StockListView() {
               </div>
 
               {/* Custody */}
-              <div style={{ width: '120px' }}>
-                <span style={{
-                  fontSize: '11px', fontWeight: 600, padding: '3px 7px', borderRadius: '99px',
-                  background: CUSTODY_BG[item.custodyLocation],
-                  color: CUSTODY_COLOR[item.custodyLocation],
-                  whiteSpace: 'nowrap',
-                }}>
-                  {CUSTODY_ICON[item.custodyLocation]} {CUSTODY_LABEL[item.custodyLocation]}
-                </span>
-              </div>
+              {(() => {
+                const isActive = (item.custodyHistory ?? []).length > 0
+                const bg    = isActive ? CUSTODY_BG[item.custodyLocation]    : '#F5F5F5'
+                const color = isActive ? CUSTODY_COLOR[item.custodyLocation] : '#999'
+                const icon  = isActive ? CUSTODY_ICON[item.custodyLocation]  : '🗂'
+                const label = isActive ? CUSTODY_LABEL[item.custodyLocation] : 'Mapped'
+                return (
+                  <div style={{ width: '120px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 7px', borderRadius: '99px', background: bg, color, whiteSpace: 'nowrap' }}>
+                      {icon} {label}
+                    </span>
+                  </div>
+                )
+              })()}
 
               {/* Shot */}
               <div style={{ width: '90px' }}>

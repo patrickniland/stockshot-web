@@ -33,6 +33,7 @@ interface AppStore {
   getItems: () => StockItem[]
   getShot: () => StockItem[]
   getNotShot: () => StockItem[]
+  getStudioQueue: () => StockItem[]
   clientName: (clientId: string | null) => string | null
   getClient: (clientId: string | null) => Client | null
   getActiveShoots: () => Shoot[]
@@ -149,6 +150,11 @@ const useAppStore = create<AppStore>()(
       getItems: () => get().getActiveShoot()?.items ?? [],
       getShot: () => get().getItems().filter(i => i.shotStatus === 'shot'),
       getNotShot: () => get().getItems().filter(i => i.shotStatus === 'notShot'),
+      getStudioQueue: () => get().getItems().filter(i =>
+        i.custodyLocation === 'at_studio' &&
+        i.shotStatus === 'notShot' &&
+        (i.custodyHistory ?? []).length > 0
+      ),
       clientName: (id) => id ? (get().clients.find(c => c.id === id)?.name ?? null) : null,
       getClient: (id) => id ? (get().clients.find(c => c.id === id) ?? null) : null,
       getActiveShoots: () => get().savedShoots.filter(s => !s.deletedAt),

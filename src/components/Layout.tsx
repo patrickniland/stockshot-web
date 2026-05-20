@@ -27,13 +27,13 @@ export default function Layout({ children, session, onSignOut, onPush, onPull, s
   syncStatus?: string
 }) {
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
-  const getNotShot = useAppStore(s => s.getNotShot)
+  const getStudioQueue = useAppStore(s => s.getStudioQueue)
   const getPending = useAppStore(s => s.getPending)
   const pendingIsMeaningful = useAppStore(s => s.pendingIsMeaningful)
   const savedShoots = useAppStore(s => s.savedShoots)
 
   const activeShoot = getActiveShoot()
-  const notShotCount = getNotShot().length
+  const studioQueueCount = getStudioQueue().length
   const pendingCount = getPending().length
   const meaningful = pendingIsMeaningful()
 
@@ -70,7 +70,7 @@ export default function Layout({ children, session, onSignOut, onPush, onPull, s
         <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
           {NAV.map(({ to, icon, label }) => {
             const badge =
-              label === 'Shot List' && notShotCount > 0 ? notShotCount :
+              label === 'Shot List' && studioQueueCount > 0 ? studioQueueCount :
               label === 'Missing' && meaningful && pendingCount > 0 ? pendingCount :
               label === 'Shoots' && savedShoots.length > 1 ? savedShoots.length :
               null

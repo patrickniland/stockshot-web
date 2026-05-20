@@ -320,7 +320,7 @@ export default function ScanInView() {
   const STAT_PILLS: { loc: CustodyLocation; label: string; color: string; count: number }[] = [
     { loc: 'at_studio',  label: 'At Studio',  color: '#2E7D32', count: atStudioCount },
     { loc: 'at_client',  label: 'At Client',  color: '#E65100', count: atClientCount },
-    ...(inTransitCount > 0 ? [{ loc: 'in_transit' as CustodyLocation, label: 'In Transit', color: '#1565C0', count: inTransitCount }] : []),
+    { loc: 'in_transit', label: 'In Transit', color: '#1565C0', count: inTransitCount },
   ]
 
   return (
@@ -587,7 +587,7 @@ export default function ScanInView() {
 
       {/* ── Right: item panel ── */}
       {(() => {
-        const pill = STAT_PILLS.find(p => p.loc === activeStatView)!
+        const pill = STAT_PILLS.find(p => p.loc === activeStatView) ?? STAT_PILLS[0]
         return (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #E0E0E0', background: '#fff', minWidth: 0 }}>
             {/* Panel header */}
