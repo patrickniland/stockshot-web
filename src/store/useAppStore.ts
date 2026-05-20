@@ -27,6 +27,7 @@ interface AppStore {
   scanOutLocation: CustodyLocation
   currentOperator: string
   shotListLocationFilter: CustodyLocation | 'all'
+  managerPin: string
 
   getActiveShoot: () => Shoot | null
   getItems: () => StockItem[]
@@ -89,6 +90,7 @@ interface AppStore {
   setScanOutLocation: (val: CustodyLocation) => void
   setCurrentOperator: (val: string) => void
   setShotListLocationFilter: (val: CustodyLocation | 'all') => void
+  setManagerPin: (val: string) => void
 }
 
 // ── Barcode normalisation ─────────────────────────────────────────────────────
@@ -136,6 +138,7 @@ const useAppStore = create<AppStore>()(
       scanOutLocation: 'in_transit',
       currentOperator: '',
       shotListLocationFilter: 'all',
+      managerPin: '',
 
       // ── Derived ───────────────────────────────────────────
       getActiveShoot: () => {
@@ -541,6 +544,7 @@ const useAppStore = create<AppStore>()(
       setMarkShotOnScanIn: (val) => set({ markShotOnScanIn: val }),
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
       setLastScanFeedback: (val) => set({ lastScanFeedback: val }),
+      setManagerPin: (val) => set({ managerPin: val }),
       setScanInLocation: (val) => set({ scanInLocation: val }),
       setScanOutLocation: (val) => set({ scanOutLocation: val }),
       setCurrentOperator: (val) => set({ currentOperator: val }),
@@ -556,6 +560,7 @@ const useAppStore = create<AppStore>()(
         scanInLocation: s.scanInLocation,
         scanOutLocation: s.scanOutLocation,
         currentOperator: s.currentOperator,
+        managerPin: s.managerPin,
       }),
     }
   )

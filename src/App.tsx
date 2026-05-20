@@ -17,6 +17,7 @@ import PendingView from './pages/PendingView'
 import JobsView from './pages/JobsView'
 import ReportsView from './pages/ReportsView'
 import ClientsView from './pages/ClientsView'
+import ManagementView from './pages/ManagementView'
 import { Session } from '@supabase/supabase-js'
 
 function AppWithSync({ session }: { session: Session }) {
@@ -61,6 +62,7 @@ function AppWithSync({ session }: { session: Session }) {
           <Route path="/pending" element={<PendingView />} />
           <Route path="/dashboard" element={<ReportsView />} />
           <Route path="/clients" element={<ClientsView />} />
+          <Route path="/management" element={<ManagementView />} />
         </Routes>
       </Layout>
     </BrowserRouter>

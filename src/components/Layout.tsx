@@ -14,7 +14,8 @@ const NAV = [
   { to: '/scan-out',  icon: '📦', label: 'Scan Out' },
   { to: '/pending',   icon: '⚠', label: 'Missing' },
   { to: '/dashboard', icon: '📊', label: 'Dashboard' },
-  { to: '/clients',   icon: '🏢', label: 'Clients' },
+  { to: '/clients',    icon: '🏢', label: 'Clients' },
+  { to: '/management', icon: '⚙', label: 'Management' },
 ]
 
 export default function Layout({ children, session, onSignOut, onPush, onPull, syncStatus }: { 

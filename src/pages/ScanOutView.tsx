@@ -8,11 +8,10 @@ import ShootPicker from '../components/ShootPicker'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type OutToKey = 'in_transit_studio' | 'in_transit_client' | 'dispatched_to_client'
+type OutToKey = 'in_transit_studio' | 'dispatched_to_client'
 
 const OUT_TO_OPTIONS: { key: OutToKey; label: string; location: CustodyLocation; notes: string }[] = [
-  { key: 'in_transit_studio',    label: 'In Transit (to Studio)',  location: 'in_transit',          notes: 'In transit to studio' },
-  { key: 'in_transit_client',    label: 'In Transit (to Client)',  location: 'in_transit',          notes: 'In transit to client' },
+  { key: 'in_transit_studio',    label: 'In Transit (to Studio)',  location: 'in_transit',           notes: 'In transit to studio' },
   { key: 'dispatched_to_client', label: 'Dispatched to Client',    location: 'dispatched_to_client', notes: '' },
 ]
 
