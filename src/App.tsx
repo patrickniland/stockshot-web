@@ -23,7 +23,10 @@ import { Session } from '@supabase/supabase-js'
 function AppWithSync({ session }: { session: Session }) {
   const orgId = useAppStore(s => s.orgId)
   const setOrgId = useAppStore(s => s.setOrgId)
+  const migrateLocations = useAppStore(s => s.migrateLocations)
   const { status, push, pull } = useSupabaseSync(orgId)
+
+  useEffect(() => { migrateLocations() }, [])
 
   useEffect(() => {
     async function initOrg() {

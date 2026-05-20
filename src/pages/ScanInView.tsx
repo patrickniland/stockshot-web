@@ -50,18 +50,16 @@ function matchesBarcode(item: StockItem, raw: string): boolean {
 
 function locationLabel(loc: CustodyLocation): string {
   switch (loc) {
-    case 'at_studio': return 'At Studio'
-    case 'with_client': return 'At Client Site'
+    case 'at_studio':  return 'At Studio'
+    case 'at_client':  return 'At Client'
     case 'in_transit': return 'In Transit'
-    case 'dispatched_to_client': return 'Dispatched'
   }
 }
 
 const LOCATION_ICON: Record<CustodyLocation, string> = {
-  with_client: '📦',
+  at_client:  '📦',
   in_transit: '🚚',
-  at_studio: '🏠',
-  dispatched_to_client: '✅',
+  at_studio:  '🏠',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -124,13 +122,13 @@ export default function ScanInView() {
   // with_client only counts items formally scanned (has history) — unscanned imports default to with_client
   // and would otherwise make the count look non-zero before any scanning.
   const shootItems = selectedShoot?.items ?? []
-  const atStudioCount   = shootItems.filter(i => i.custodyLocation === 'at_studio').length
-  const withClientCount = shootItems.filter(i => i.custodyLocation === 'with_client' && (i.custodyHistory ?? []).length > 0).length
-  const inTransitCount  = shootItems.filter(i => i.custodyLocation === 'in_transit').length
+  const atStudioCount  = shootItems.filter(i => i.custodyLocation === 'at_studio').length
+  const atClientCount  = shootItems.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
+  const inTransitCount = shootItems.filter(i => i.custodyLocation === 'in_transit').length
 
   const panelItems = shootItems.filter(i => {
     if (i.custodyLocation !== activeStatView) return false
-    if (activeStatView === 'with_client') return (i.custodyHistory ?? []).length > 0
+    if (activeStatView === 'at_client') return (i.custodyHistory ?? []).length > 0
     return true
   })
 
@@ -279,7 +277,7 @@ export default function ScanInView() {
         description: '',
         location: scanInLocation,
         time: now,
-        prev: { custodyLocation: 'with_client', custodyHistory: [], lastScannedAt: null, lastScannedBy: null },
+        prev: { custodyLocation: 'at_client', custodyHistory: [], lastScannedAt: null, lastScannedBy: null },
       },
       ...prev,
     ].slice(0, 10))
@@ -320,8 +318,8 @@ export default function ScanInView() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const STAT_PILLS: { loc: CustodyLocation; label: string; color: string; count: number }[] = [
-    { loc: 'at_studio',   label: 'At Studio',   color: '#2E7D32', count: atStudioCount },
-    { loc: 'with_client', label: 'With Client',  color: '#E65100', count: withClientCount },
+    { loc: 'at_studio',  label: 'At Studio',  color: '#2E7D32', count: atStudioCount },
+    { loc: 'at_client',  label: 'At Client',  color: '#E65100', count: atClientCount },
     ...(inTransitCount > 0 ? [{ loc: 'in_transit' as CustodyLocation, label: 'In Transit', color: '#1565C0', count: inTransitCount }] : []),
   ]
 
@@ -371,7 +369,7 @@ export default function ScanInView() {
         {/* Location */}
         <ControlRow label="Location">
           <div style={{ display: 'flex', gap: '6px' }}>
-            {(['at_studio', 'with_client'] as CustodyLocation[]).map(loc => (
+            {(['at_studio', 'at_client'] as CustodyLocation[]).map(loc => (
               <button
                 key={loc}
                 onClick={() => setScanInLocation(loc)}

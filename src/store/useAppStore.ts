@@ -80,6 +80,7 @@ interface AppStore {
   scanOut: (sku: string, to: string) => void
 
   setShoots: (shoots: Shoot[]) => void
+  migrateLocations: () => void
   setClients: (clients: Client[]) => void
   setActiveShootId: (id: string) => void
   setOrgId: (id: string) => void
@@ -164,9 +165,9 @@ const useAppStore = create<AppStore>()(
       },
 
       // Legacy selectors
-      getPending: () => get().getItems().filter(i => i.custodyLocation === 'with_client'),
+      getPending: () => get().getItems().filter(i => i.custodyLocation === 'at_client'),
       getReceived: () => get().getItems().filter(i => i.custodyLocation === 'at_studio'),
-      getDispatched: () => get().getItems().filter(i => i.custodyLocation === 'dispatched_to_client'),
+      getDispatched: () => get().getItems().filter(i => i.custodyLocation === 'at_client'),
       pendingIsMeaningful: () =>
         get().getActiveShoot()?.drops.some(d => d.importMode === 'jobList') ?? false,
 
@@ -521,15 +522,15 @@ const useAppStore = create<AppStore>()(
         const now = new Date().toISOString()
         const updatedItem: StockItem = {
           ...item,
-          custodyLocation: 'dispatched_to_client',
+          custodyLocation: 'at_client',
           lastScannedAt: now,
           lastScannedBy: '',
         }
         updateShootItems(items.map(i => i.id === item.id ? updatedItem : i))
-        set({ lastScanFeedback: fb('success', 'Dispatched', sku) })
+        set({ lastScanFeedback: fb('success', 'At Client', sku) })
 
         updateItemCustody(item.id, {
-          custodyLocation: 'dispatched_to_client',
+          custodyLocation: 'at_client',
           custodyHistory: updatedItem.custodyHistory,
           lastScannedAt: now,
           lastScannedBy: '',
@@ -538,6 +539,22 @@ const useAppStore = create<AppStore>()(
 
       // ── Sync actions ──────────────────────────────────────
       setShoots: (shoots) => set({ savedShoots: shoots }),
+      migrateLocations: () => {
+        const migrateL = (loc: string): CustodyLocation => {
+          if (loc === 'with_client' || loc === 'dispatched_to_client') return 'at_client'
+          return loc as CustodyLocation
+        }
+        const { savedShoots } = get()
+        const migrated = savedShoots.map(shoot => ({
+          ...shoot,
+          items: shoot.items.map(item => ({
+            ...item,
+            custodyLocation: migrateL(item.custodyLocation),
+            custodyHistory: (item.custodyHistory ?? []).map(e => ({ ...e, location: migrateL(e.location) })),
+          })),
+        }))
+        set({ savedShoots: migrated })
+      },
       setClients: (clients) => set({ clients }),
       setActiveShootId: (id) => set({ activeShootId: id }),
       setOrgId: (id) => set({ orgId: id }),

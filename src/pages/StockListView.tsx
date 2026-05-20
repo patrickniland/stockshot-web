@@ -11,25 +11,22 @@ import ShootPicker from '../components/ShootPicker'
 // ── Custody styling ───────────────────────────────────────────────────────────
 
 const CUSTODY_LABEL: Record<CustodyLocation, string> = {
-  with_client:          'With Client',
-  in_transit:           'In Transit',
-  at_studio:            'At Studio',
-  dispatched_to_client: 'Dispatched',
+  at_client:  'At Client',
+  in_transit: 'In Transit',
+  at_studio:  'At Studio',
 }
 const CUSTODY_COLOR: Record<CustodyLocation, string> = {
-  with_client:          '#E65100',
-  in_transit:           '#1565C0',
-  at_studio:            '#2E7D32',
-  dispatched_to_client: '#6A1B9A',
+  at_client:  '#E65100',
+  in_transit: '#1565C0',
+  at_studio:  '#2E7D32',
 }
 const CUSTODY_BG: Record<CustodyLocation, string> = {
-  with_client:          '#FFF3E0',
-  in_transit:           '#E3F2FD',
-  at_studio:            '#E8F5E9',
-  dispatched_to_client: '#F3E5F5',
+  at_client:  '#FFF3E0',
+  in_transit: '#E3F2FD',
+  at_studio:  '#E8F5E9',
 }
 const CUSTODY_ICON: Record<CustodyLocation, string> = {
-  with_client: '📦', in_transit: '🚚', at_studio: '🏠', dispatched_to_client: '✅',
+  at_client: '📦', in_transit: '🚚', at_studio: '🏠',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -160,10 +157,9 @@ export default function StockListView() {
         <select value={custodyFilter} onChange={e => setCustodyFilter(e.target.value as CustodyLocation | 'all')}
           style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
           <option value="all">All</option>
-          <option value="with_client">With Client</option>
+          <option value="at_client">At Client</option>
           <option value="in_transit">In Transit</option>
           <option value="at_studio">At Studio</option>
-          <option value="dispatched_to_client">Dispatched</option>
         </select>
 
         <button onClick={() => setSortAsc(!sortAsc)} style={{ padding: '6px 10px', background: '#E0E0E0', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>

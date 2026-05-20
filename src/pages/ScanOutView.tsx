@@ -8,11 +8,11 @@ import ShootPicker from '../components/ShootPicker'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type OutToKey = 'in_transit_studio' | 'dispatched_to_client'
+type OutToKey = 'in_transit' | 'at_client'
 
 const OUT_TO_OPTIONS: { key: OutToKey; label: string; location: CustodyLocation; notes: string }[] = [
-  { key: 'in_transit_studio',    label: 'In Transit (to Studio)',  location: 'in_transit',           notes: 'In transit to studio' },
-  { key: 'dispatched_to_client', label: 'Dispatched to Client',    location: 'dispatched_to_client', notes: '' },
+  { key: 'in_transit', label: 'In Transit',         location: 'in_transit', notes: '' },
+  { key: 'at_client',  label: 'Return to Client',   location: 'at_client',  notes: '' },
 ]
 
 type RecentScan = {
@@ -27,10 +27,9 @@ type RecentScan = {
 }
 
 const LOCATION_ICON: Record<CustodyLocation, string> = {
-  with_client: '📦',
+  at_client:  '📦',
   in_transit: '🚚',
-  at_studio: '🏠',
-  dispatched_to_client: '✅',
+  at_studio:  '🏠',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -57,10 +56,9 @@ function matchesBarcode(item: StockItem, raw: string): boolean {
 
 function locationLabel(loc: CustodyLocation): string {
   switch (loc) {
-    case 'at_studio': return 'At Studio'
-    case 'with_client': return 'With Client'
+    case 'at_studio':  return 'At Studio'
+    case 'at_client':  return 'At Client'
     case 'in_transit': return 'In Transit'
-    case 'dispatched_to_client': return 'Dispatched'
   }
 }
 
@@ -70,7 +68,7 @@ export default function ScanOutView() {
   const scanRef = useRef<HTMLInputElement>(null)
   const [scanInput, setScanInput] = useState('')
   const [showCamera, setShowCamera] = useState(false)
-  const [outToKey, setOutToKey] = useState<OutToKey>('in_transit_studio')
+  const [outToKey, setOutToKey] = useState<OutToKey>('in_transit')
   const [recentScans, setRecentScans] = useState<RecentScan[]>([])
   const [activeStatView, setActiveStatView] = useState<CustodyLocation>('at_studio')
 
@@ -100,13 +98,13 @@ export default function ScanOutView() {
     ? (activeShoots.find(s => s.id === selectedShootId)?.items ?? [])
     : activeShoots.flatMap(s => s.items)
   const allItems = activeShoots.flatMap(s => s.items)
-  const atStudioCount   = allItems.filter(i => i.custodyLocation === 'at_studio').length
-  const inTransitCount  = allItems.filter(i => i.custodyLocation === 'in_transit').length
-  const dispatchedCount = allItems.filter(i => i.custodyLocation === 'dispatched_to_client').length
+  const atStudioCount  = allItems.filter(i => i.custodyLocation === 'at_studio').length
+  const inTransitCount = allItems.filter(i => i.custodyLocation === 'in_transit').length
+  const atClientCount  = allItems.filter(i => i.custodyLocation === 'at_client').length
 
   const panelItems = shootItems.filter(i => {
     if (i.custodyLocation !== activeStatView) return false
-    if (activeStatView === 'with_client') return (i.custodyHistory ?? []).length > 0
+    if (activeStatView === 'at_client') return (i.custodyHistory ?? []).length > 0
     return true
   })
 
@@ -211,9 +209,9 @@ export default function ScanOutView() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const STAT_PILLS = [
-    { loc: 'at_studio'          as CustodyLocation, label: 'At Studio',  color: '#2E7D32', count: atStudioCount },
-    { loc: 'in_transit'         as CustodyLocation, label: 'In Transit', color: '#1565C0', count: inTransitCount },
-    { loc: 'dispatched_to_client' as CustodyLocation, label: 'Dispatched', color: '#6A1B9A', count: dispatchedCount },
+    { loc: 'at_studio'  as CustodyLocation, label: 'At Studio',  color: '#2E7D32', count: atStudioCount },
+    { loc: 'in_transit' as CustodyLocation, label: 'In Transit', color: '#1565C0', count: inTransitCount },
+    { loc: 'at_client'  as CustodyLocation, label: 'At Client',  color: '#E65100', count: atClientCount },
   ]
 
   return (

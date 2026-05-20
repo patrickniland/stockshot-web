@@ -78,10 +78,9 @@ export async function exportStockListPDF(items: StockItem[]): Promise<void> {
 // ── Shot list PDF (list format, grouped by look or product type) ──────────────
 
 const CUSTODY_LABEL: Record<string, string> = {
-  with_client: 'With Client',
+  at_client:  'At Client',
   in_transit: 'In Transit',
-  at_studio: 'At Studio',
-  dispatched_to_client: 'Dispatched',
+  at_studio:  'At Studio',
 }
 
 export async function exportShotListPDF(

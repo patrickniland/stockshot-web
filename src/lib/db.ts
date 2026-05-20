@@ -203,7 +203,7 @@ function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
     qr_code_value: item.qrCodeValue,
     description: item.description,
     extra_fields: item.extraFields,
-    custody_location: item.custodyLocation ?? 'with_client',
+    custody_location: item.custodyLocation ?? 'at_client',
     custody_history: item.custodyHistory ?? [],
     last_scanned_at: item.lastScannedAt,
     last_scanned_by: item.lastScannedBy,
@@ -217,7 +217,14 @@ function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
   }
 }
 
+function migrateLoc(loc: string): CustodyLocation {
+  if (loc === 'with_client' || loc === 'dispatched_to_client') return 'at_client'
+  if (loc === 'at_studio' || loc === 'in_transit' || loc === 'at_client') return loc as CustodyLocation
+  return 'at_client'
+}
+
 function mapItemFromDB(row: any): StockItem {
+  const rawHistory: any[] = row.custody_history ?? []
   return {
     id: row.id,
     styleNumber: row.style_number,
@@ -225,8 +232,8 @@ function mapItemFromDB(row: any): StockItem {
     qrCodeValue: row.qr_code_value,
     description: row.description ?? '',
     extraFields: row.extra_fields ?? {},
-    custodyLocation: row.custody_location ?? 'with_client',
-    custodyHistory: row.custody_history ?? [],
+    custodyLocation: migrateLoc(row.custody_location ?? 'at_client'),
+    custodyHistory: rawHistory.map(e => ({ ...e, location: migrateLoc(e.location) })),
     lastScannedAt: row.last_scanned_at ?? null,
     lastScannedBy: row.last_scanned_by ?? null,
     shotStatus: row.shot_status,

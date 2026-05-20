@@ -119,7 +119,7 @@ export function importFromRows(
       qrCodeValue,
       description,
       extraFields,
-      custodyLocation: 'with_client',
+      custodyLocation: 'at_client',
       custodyHistory: [],
       lastScannedAt: null,
       lastScannedBy: null,

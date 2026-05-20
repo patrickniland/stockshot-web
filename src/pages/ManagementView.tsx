@@ -5,10 +5,9 @@ import useAppStore from '../store/useAppStore'
 import { CustodyLocation } from '../types'
 
 const LOCATIONS: { value: CustodyLocation; label: string; icon: string; color: string }[] = [
-  { value: 'with_client',         label: 'With Client',    icon: '📦', color: '#E65100' },
-  { value: 'in_transit',          label: 'In Transit',     icon: '🚚', color: '#1565C0' },
-  { value: 'at_studio',           label: 'At Studio',      icon: '🏠', color: '#2E7D32' },
-  { value: 'dispatched_to_client',label: 'Dispatched',     icon: '✅', color: '#6A1B9A' },
+  { value: 'at_client',  label: 'At Client',  icon: '📦', color: '#E65100' },
+  { value: 'in_transit', label: 'In Transit', icon: '🚚', color: '#1565C0' },
+  { value: 'at_studio',  label: 'At Studio',  icon: '🏠', color: '#2E7D32' },
 ]
 
 export default function ManagementView() {
@@ -25,7 +24,7 @@ export default function ManagementView() {
 
   // Batch move state
   const [fromLoc, setFromLoc]         = useState<CustodyLocation>('at_studio')
-  const [toLoc, setToLoc]             = useState<CustodyLocation>('dispatched_to_client')
+  const [toLoc, setToLoc]             = useState<CustodyLocation>('at_client')
   const [shootFilter, setShootFilter] = useState<string>('all')
   const [enteredPin, setEnteredPin]   = useState('')
   const [result, setResult]           = useState<{ count: number; ok: boolean } | null>(null)

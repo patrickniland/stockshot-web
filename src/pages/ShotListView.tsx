@@ -146,11 +146,10 @@ export default function ShotListView() {
       <div style={{ padding: '8px 16px', background: '#fff', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
         {([
-          { value: 'all',                  label: 'All' },
-          { value: 'at_studio',            label: '🏠 At Studio' },
-          { value: 'with_client',          label: '📦 With Client' },
-          { value: 'in_transit',           label: '🚚 In Transit' },
-          { value: 'dispatched_to_client', label: '✅ Dispatched' },
+          { value: 'all',        label: 'All' },
+          { value: 'at_studio',  label: '🏠 At Studio' },
+          { value: 'at_client',  label: '📦 At Client' },
+          { value: 'in_transit', label: '🚚 In Transit' },
         ] as const).map(opt => (
           <button key={opt.value} onClick={() => setShotListLocationFilter(opt.value)} style={{
             padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
@@ -363,10 +362,9 @@ export default function ShotListView() {
 }
 
 const CUSTODY_ICON: Record<string, string> = {
-  with_client: '📦',
+  at_client:  '📦',
   in_transit: '🚚',
-  at_studio: '🏠',
-  dispatched_to_client: '✅',
+  at_studio:  '🏠',
 }
 
 function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle, onAngleToggle, onShotStatusChange, onAssignProductType }: {

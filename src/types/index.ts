@@ -1,6 +1,6 @@
 // StockShot — Core Types
 
-export type CustodyLocation = 'with_client' | 'in_transit' | 'at_studio' | 'dispatched_to_client'
+export type CustodyLocation = 'at_client' | 'in_transit' | 'at_studio'
 
 export interface CustodyEvent {
   location: CustodyLocation
