@@ -72,6 +72,7 @@ export default function ScanOutView() {
   const [showCamera, setShowCamera] = useState(false)
   const [outToKey, setOutToKey] = useState<OutToKey>('in_transit_studio')
   const [recentScans, setRecentScans] = useState<RecentScan[]>([])
+  const [activeStatView, setActiveStatView] = useState<CustodyLocation>('at_studio')
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
@@ -95,10 +96,19 @@ export default function ScanOutView() {
   const selectedOption = OUT_TO_OPTIONS.find(o => o.key === outToKey) ?? OUT_TO_OPTIONS[0]
 
   // Stats across all shoots (or selected shoot)
+  const shootItems = selectedShootId
+    ? (activeShoots.find(s => s.id === selectedShootId)?.items ?? [])
+    : activeShoots.flatMap(s => s.items)
   const allItems = activeShoots.flatMap(s => s.items)
-  const atStudioCount  = allItems.filter(i => i.custodyLocation === 'at_studio').length
-  const inTransitCount = allItems.filter(i => i.custodyLocation === 'in_transit').length
+  const atStudioCount   = allItems.filter(i => i.custodyLocation === 'at_studio').length
+  const inTransitCount  = allItems.filter(i => i.custodyLocation === 'in_transit').length
   const dispatchedCount = allItems.filter(i => i.custodyLocation === 'dispatched_to_client').length
+
+  const panelItems = shootItems.filter(i => {
+    if (i.custodyLocation !== activeStatView) return false
+    if (activeStatView === 'with_client') return (i.custodyHistory ?? []).length > 0
+    return true
+  })
 
   // ── Scan logic ──────────────────────────────────────────────────────────────
 
@@ -200,16 +210,30 @@ export default function ScanOutView() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  return (
-    <div style={{ padding: '1.5rem', maxWidth: '640px' }}>
+  const STAT_PILLS = [
+    { loc: 'at_studio'          as CustodyLocation, label: 'At Studio',  color: '#2E7D32', count: atStudioCount },
+    { loc: 'in_transit'         as CustodyLocation, label: 'In Transit', color: '#1565C0', count: inTransitCount },
+    { loc: 'dispatched_to_client' as CustodyLocation, label: 'Dispatched', color: '#6A1B9A', count: dispatchedCount },
+  ]
 
-      {/* Stats */}
+  return (
+    <div style={{ display: 'flex', height: '100%' }}>
+
+      {/* ── Left: scan controls ── */}
+      <div style={{ width: '500px', flexShrink: 0, overflowY: 'auto', padding: '1.5rem', background: '#F5F5F5' }}>
+
+      {/* Stats / location tabs */}
       <div style={{ display: 'flex', background: '#fff', borderRadius: '10px', border: '1px solid #E0E0E0', marginBottom: '1rem', overflow: 'hidden' }}>
-        <StatPill value={atStudioCount}   label="At Studio"  color="#2E7D32" />
-        <div style={{ width: '1px', background: '#E0E0E0' }} />
-        <StatPill value={inTransitCount}  label="In Transit" color="#1565C0" />
-        <div style={{ width: '1px', background: '#E0E0E0' }} />
-        <StatPill value={dispatchedCount} label="Dispatched" color="#6A1B9A" />
+        {STAT_PILLS.map((pill, idx) => (
+          <div key={pill.loc} style={{ display: 'flex', flex: 1 }}>
+            {idx > 0 && <div style={{ width: '1px', background: '#E0E0E0' }} />}
+            <StatPill
+              value={pill.count} label={pill.label} color={pill.color}
+              isActive={activeStatView === pill.loc}
+              onClick={() => setActiveStatView(pill.loc)}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Controls + Scanner card */}
@@ -365,17 +389,80 @@ export default function ScanOutView() {
       {showCamera && (
         <CameraScanner onScan={handleCameraScan} onClose={() => setShowCamera(false)} />
       )}
+
+      </div>{/* end left column */}
+
+      {/* ── Right: item panel ── */}
+      {(() => {
+        const pill = STAT_PILLS.find(p => p.loc === activeStatView)!
+        return (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #E0E0E0', background: '#fff', minWidth: 0 }}>
+            <div style={{ padding: '12px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: pill.color }}>{pill.label}</span>
+              <span style={{ background: pill.color, color: '#fff', fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px' }}>
+                {panelItems.length}
+              </span>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: '11px', color: '#aaa' }}>
+                {selectedShootId ? activeShoots.find(s => s.id === selectedShootId)?.name : 'All shoots'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', padding: '6px 14px', background: '#FAFAFA', borderBottom: '1px solid #F0F0F0', fontSize: '10px', fontWeight: 600, color: '#999', flexShrink: 0 }}>
+              <span style={{ width: '28px' }}>#</span>
+              <span style={{ width: '130px' }}>Style</span>
+              <span style={{ flex: 1 }}>Description</span>
+              <span style={{ width: '60px', textAlign: 'right' }}>Look</span>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {panelItems.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>
+                  No items at this location
+                </div>
+              ) : panelItems.map((item, i) => (
+                <div key={item.id} style={{
+                  display: 'flex', alignItems: 'center',
+                  padding: '7px 14px',
+                  background: i % 2 === 0 ? '#fff' : '#FAFAFA',
+                  borderBottom: '1px solid #F5F5F5',
+                }}>
+                  <span style={{ width: '28px', fontSize: '10px', color: '#bbb' }}>{i + 1}</span>
+                  <span style={{ width: '130px', fontSize: '12px', fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.styleNumber}
+                  </span>
+                  <span style={{ flex: 1, fontSize: '11px', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.description || '—'}
+                  </span>
+                  <span style={{ width: '60px', textAlign: 'right', fontSize: '10px', color: '#888' }}>
+                    {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
     </div>
   )
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StatPill({ value, label, color }: { value: number; label: string; color: string }) {
+function StatPill({ value, label, color, isActive, onClick }: {
+  value: number; label: string; color: string; isActive?: boolean; onClick?: () => void
+}) {
   return (
-    <div style={{ flex: 1, textAlign: 'center', padding: '10px 8px' }}>
+    <div onClick={onClick} style={{
+      flex: 1, textAlign: 'center', padding: '10px 8px',
+      cursor: 'pointer',
+      background: isActive ? color + '12' : 'transparent',
+      transition: 'background 0.1s',
+    }}>
       <div style={{ fontSize: '24px', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: '11px', color: '#666' }}>{label}</div>
+      <div style={{ fontSize: '11px', color: isActive ? color : '#666', fontWeight: isActive ? 600 : 400 }}>{label}</div>
+      {isActive && <div style={{ width: '24px', height: '2px', background: color, margin: '3px auto 0', borderRadius: '1px' }} />}
     </div>
   )
 }
