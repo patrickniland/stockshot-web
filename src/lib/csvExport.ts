@@ -1,66 +1,67 @@
-// StockShot — CSV Export Helper
+// StockShot — XLS Export Helper
 
 import { StockItem } from '../types'
-
-function escape(val: string): string {
-  if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-    return `"${val.replace(/"/g, '""')}"`
-  }
-  return val
-}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function download(content: string, filename: string) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+async function downloadXLS(rows: Record<string, string>[], filename: string) {
+  const XLSX = await import('xlsx')
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+  XLSX.writeFile(wb, filename)
 }
 
-export function exportStockListCSV(items: StockItem[]) {
-  const headers = ['Style Number', 'SKU', 'Description', 'Custody Location', 'Last Scanned At', 'Last Scanned By', 'Shot Status', 'Product Type']
-  const rows = items.map(i => [
-    i.styleNumber, i.sku, i.description,
-    i.custodyLocation,
-    i.lastScannedAt ?? '', i.lastScannedBy ?? '',
-    i.shotStatus, i.productType ?? '',
-  ].map(escape).join(','))
-  download([headers.join(','), ...rows].join('\n'), `StockShot_StockList_${today()}.csv`)
+export async function exportStockListCSV(items: StockItem[]) {
+  const rows = items.map(i => ({
+    'Style Number': i.styleNumber,
+    'SKU': i.sku,
+    'Description': i.description,
+    'Custody Location': i.custodyLocation,
+    'Last Scanned At': i.lastScannedAt ?? '',
+    'Last Scanned By': i.lastScannedBy ?? '',
+    'Shot Status': i.shotStatus,
+    'Product Type': i.productType ?? '',
+  }))
+  await downloadXLS(rows, `StockShot_StockList_${today()}.xlsx`)
 }
 
-export function exportDetailedStockListCSV(items: StockItem[]) {
-  const headers = ['Style Number', 'SKU', 'Description', 'Custody Location', 'Last Scanned At', 'Last Scanned By', 'Shot Status', 'Product Type', 'Custody History']
-  const rows = items.map(i => [
-    i.styleNumber, i.sku, i.description,
-    i.custodyLocation,
-    i.lastScannedAt ?? '', i.lastScannedBy ?? '',
-    i.shotStatus, i.productType ?? '',
-    JSON.stringify(i.custodyHistory),
-  ].map(escape).join(','))
-  download([headers.join(','), ...rows].join('\n'), `StockShot_StockList_Detailed_${today()}.csv`)
+export async function exportDetailedStockListCSV(items: StockItem[]) {
+  const rows = items.map(i => ({
+    'Style Number': i.styleNumber,
+    'SKU': i.sku,
+    'Description': i.description,
+    'Custody Location': i.custodyLocation,
+    'Last Scanned At': i.lastScannedAt ?? '',
+    'Last Scanned By': i.lastScannedBy ?? '',
+    'Shot Status': i.shotStatus,
+    'Product Type': i.productType ?? '',
+    'Custody History': JSON.stringify(i.custodyHistory),
+  }))
+  await downloadXLS(rows, `StockShot_StockList_Detailed_${today()}.xlsx`)
 }
 
-export function exportMissingItemsCSV(items: StockItem[]) {
-  const headers = ['Style Number', 'SKU', 'Description', 'Product Type']
-  const rows = items.map(i => [
-    i.styleNumber, i.sku, i.description, i.productType ?? '',
-  ].map(escape).join(','))
-  download([headers.join(','), ...rows].join('\n'), `StockShot_Missing_${today()}.csv`)
+export async function exportMissingItemsCSV(items: StockItem[]) {
+  const rows = items.map(i => ({
+    'Style Number': i.styleNumber,
+    'SKU': i.sku,
+    'Description': i.description,
+    'Product Type': i.productType ?? '',
+  }))
+  await downloadXLS(rows, `StockShot_Missing_${today()}.xlsx`)
 }
 
-export function exportShotListCSV(items: StockItem[]) {
-  const headers = ['Style Number', 'SKU', 'Description', 'Shot Status', 'Product Type', 'Required Angles', 'Completed Angles']
-  const rows = items.map(i => [
-    i.styleNumber, i.sku, i.description,
-    i.shotStatus, i.productType ?? '',
-    i.requiredAngles.join(';'),
-    i.completedAngles.join(';'),
-  ].map(escape).join(','))
-  download([headers.join(','), ...rows].join('\n'), `StockShot_ShotList_${today()}.csv`)
+export async function exportShotListCSV(items: StockItem[]) {
+  const rows = items.map(i => ({
+    'Style Number': i.styleNumber,
+    'SKU': i.sku,
+    'Description': i.description,
+    'Shot Status': i.shotStatus,
+    'Product Type': i.productType ?? '',
+    'Required Angles': i.requiredAngles.join('; '),
+    'Completed Angles': i.completedAngles.join('; '),
+  }))
+  await downloadXLS(rows, `StockShot_ShotList_${today()}.xlsx`)
 }

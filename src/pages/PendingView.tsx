@@ -77,7 +77,7 @@ export default function PendingView() {
           {sortAsc ? '↑' : '↓'}
         </button>
 
-        <button onClick={() => exportMissingItemsCSV(filtered)} style={{ padding: '6px 12px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>CSV</button>
+        <button onClick={() => exportMissingItemsCSV(filtered)} style={{ padding: '6px 12px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>XLS</button>
         <button onClick={() => exportMissingItemsPDF(filtered)} style={{ padding: '6px 12px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>PDF</button>
       </div>
 

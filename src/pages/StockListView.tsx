@@ -169,8 +169,8 @@ export default function StockListView() {
         <button onClick={() => setSortAsc(!sortAsc)} style={{ padding: '6px 10px', background: '#E0E0E0', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
           {sortAsc ? '↑' : '↓'}
         </button>
-        <button onClick={() => exportStockListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>CSV</button>
-        <button onClick={() => exportDetailedStockListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }} title="CSV with full custody history">CSV+</button>
+        <button onClick={() => exportStockListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>XLS</button>
+        <button onClick={() => exportDetailedStockListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }} title="XLS with full custody history">XLS+</button>
         <button onClick={() => exportStockListPDF(filtered)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>PDF</button>
       </div>
 
