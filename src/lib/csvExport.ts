@@ -55,10 +55,10 @@ export function exportMissingItemsCSV(items: StockItem[]) {
 }
 
 export function exportShotListCSV(items: StockItem[]) {
-  const headers = ['Style Number', 'SKU', 'Shot Status', 'Product Type', 'Required Angles', 'Completed Angles']
+  const headers = ['Style Number', 'SKU', 'Description', 'Shot Status', 'Product Type', 'Required Angles', 'Completed Angles']
   const rows = items.map(i => [
-    i.styleNumber, i.sku, i.shotStatus,
-    i.productType ?? '',
+    i.styleNumber, i.sku, i.description,
+    i.shotStatus, i.productType ?? '',
     i.requiredAngles.join(';'),
     i.completedAngles.join(';'),
   ].map(escape).join(','))
