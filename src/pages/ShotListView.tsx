@@ -41,10 +41,14 @@ export default function ShotListView() {
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const allItems = shoot?.items ?? []
 
-  // Location filter (applied first; 'all' shows everything)
+  // Only show items that have been formally scanned in (have custody history).
+  // Unscanned imports default to with_client but shouldn't crowd the shot list.
+  const scannedItems = allItems.filter(i => (i.custodyHistory ?? []).length > 0)
+
+  // Location filter narrows within scanned items; 'all' shows all scanned
   const locationFiltered = shotListLocationFilter === 'all'
-    ? allItems
-    : allItems.filter(i => i.custodyLocation === shotListLocationFilter)
+    ? scannedItems
+    : scannedItems.filter(i => i.custodyLocation === shotListLocationFilter)
 
   // Get client product types for assignment
   const client = clients.find(c => c.id === shoot?.clientId) ?? null
@@ -158,7 +162,7 @@ export default function ShotListView() {
             {opt.label}
           </button>
         ))}
-        <span style={{ fontSize: '11px', color: '#999', marginLeft: 'auto' }}>{locationFiltered.length} items</span>
+        <span style={{ fontSize: '11px', color: '#999', marginLeft: 'auto' }}>{scannedItems.length} scanned / {allItems.length} total</span>
       </div>
 
       {/* Toolbar */}
@@ -244,7 +248,7 @@ export default function ShotListView() {
       {/* Look Builder panel */}
       {showLookBuilder && shoot && (
         <LookBuilder
-          items={allItems}
+          items={scannedItems}
           lookOrder={shoot.lookOrder}
           onUpdateItem={(itemId, looks) => storeUpdateItem(itemId, { looks })}
           onAddLook={() => bumpLook()}
