@@ -107,6 +107,7 @@ interface AppStore {
   setLastSyncedAt: (ts: string | null) => void
   setLastPulledAt: (ts: string | null) => void
   mergeItems: (updates: Array<{ item: StockItem; shootId: string }>) => void
+  mergeShoots: (updates: Array<Omit<Shoot, 'items'>>, newShootsWithItems: Shoot[]) => void
 }
 
 // ── Barcode normalisation ─────────────────────────────────────────────────────
@@ -641,6 +642,18 @@ const useAppStore = create<AppStore>()(
           return { ...shoot, items: [...updatedItems, ...newItems] }
         }),
       })),
+
+      mergeShoots: (updates, newShootsWithItems) => set(s => {
+        const existingIds = new Set(s.savedShoots.map(sh => sh.id))
+        const updatedShoots = s.savedShoots.map(shoot => {
+          const found = updates.find(u => u.id === shoot.id)
+          if (!found) return shoot
+          return { ...found, items: shoot.items } // update metadata, preserve local items
+        })
+        return {
+          savedShoots: [...updatedShoots, ...newShootsWithItems.filter(sh => !existingIds.has(sh.id))],
+        }
+      }),
     }),
     {
       name: 'stockshot-v2',

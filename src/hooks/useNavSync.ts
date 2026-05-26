@@ -18,8 +18,6 @@ export function useNavSync({ onEnter = null, onLeave = null }: NavSyncConfig) {
     if (didRun.current) return
     didRun.current = true
 
-    let cancelled = false
-
     async function enter() {
       if (!onEnter) return
 
@@ -28,14 +26,8 @@ export function useNavSync({ onEnter = null, onLeave = null }: NavSyncConfig) {
       // Push before pull — never pull over unsaved local changes or pending deletes
       if (dirtyItemIds.length > 0 || deletedShootIds.length > 0 || deletedClientIds.length > 0) {
         const { failed } = await pushDirty()
-        if (cancelled) return
-        if (failed.length > 0) {
-          // Push failed: leave local state alone, skip pull
-          return
-        }
+        if (failed.length > 0) return
       }
-
-      if (cancelled) return
 
       if (onEnter === 'pull') {
         await pullSince(lastPulledAt)
@@ -47,7 +39,6 @@ export function useNavSync({ onEnter = null, onLeave = null }: NavSyncConfig) {
     enter()
 
     return () => {
-      cancelled = true
       // Fire-and-forget push on leave — failed items stay in dirtyItemIds
       // and will be retried on the next page's onEnter push-before-pull.
       if (onLeave === 'push') {

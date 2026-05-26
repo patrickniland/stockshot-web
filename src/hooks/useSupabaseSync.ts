@@ -8,6 +8,7 @@ import {
   fetchItemsForShoot,
   fetchClients,
   fetchItemsSince,
+  fetchShootsSince,
   upsertItem,
   deleteShoot,
   deleteClientFromDB,
@@ -93,10 +94,28 @@ export async function pullSince(since: string | null): Promise<void> {
   store.setSyncStatus('syncing')
 
   try {
-    const updatedItems = await fetchItemsSince(orgId, since)
-    if (pullId !== activePullId) return // superseded
+    const [updatedItems, updatedShootMetas] = await Promise.all([
+      fetchItemsSince(orgId, since),
+      fetchShootsSince(orgId, since),
+    ])
+    if (pullId !== activePullId) return
+
+    // Fetch full items for any shoots that are new to this device
+    const existingShootIds = new Set(store.savedShoots.map(s => s.id))
+    const newShootMetas = updatedShootMetas.filter(m => !existingShootIds.has(m.id))
+    const newShootsWithItems = await Promise.all(
+      newShootMetas.map(async meta => ({
+        ...meta,
+        items: await fetchItemsForShoot(meta.id),
+      }))
+    )
+    if (pullId !== activePullId) return
 
     store.mergeItems(updatedItems)
+    if (updatedShootMetas.length > 0 || newShootsWithItems.length > 0) {
+      store.mergeShoots(updatedShootMetas, newShootsWithItems)
+    }
+
     const now = new Date().toISOString()
     store.setLastPulledAt(now)
     store.setLastSyncedAt(now)

@@ -193,6 +193,31 @@ export async function deleteClientFromDB(clientId: string): Promise<void> {
 
 // ── Mappers ───────────────────────────────────────────────────────────────────
 
+export async function fetchShootsSince(
+  orgId: string,
+  since: string
+): Promise<Omit<Shoot, 'items'>[]> {
+  const { data, error } = await supabase
+    .from('shoots')
+    .select('id, name, client_id, created_at, updated_at, drops, look_order, deleted_at, is_unassigned')
+    .eq('org_id', orgId)
+    .gt('updated_at', since)
+
+  if (error) throw error
+  return (data ?? []).map(row => ({
+    id: row.id,
+    name: row.name,
+    clientId: row.client_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    drops: row.drops ?? [],
+    lookOrder: row.look_order ?? [],
+    deletedAt: row.deleted_at ?? null,
+    isUnassigned: row.is_unassigned ?? false,
+    items: [],
+  }))
+}
+
 export async function fetchItemsSince(
   orgId: string,
   since: string
