@@ -7,7 +7,7 @@ import {
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem, upsertShootMeta } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta } from '../lib/db'
 
 interface AppStore {
   clients: Client[]
@@ -350,23 +350,41 @@ const useAppStore = create<AppStore>()(
 
       // ── Item actions ──────────────────────────────────────
       updateItem: (itemId, updates) => {
+        const { orgId, activeShootId } = get()
         const items = get().getItems().map(i => i.id === itemId ? { ...i, ...updates } : i)
         get().updateShootItems(items)
         get().markDirty(itemId)
+        if (orgId && activeShootId) {
+          const updated = items.find(i => i.id === itemId)
+          if (updated) {
+            upsertItem(updated, activeShootId, orgId)
+              .then(() => get().clearDirty([itemId]))
+              .catch(() => {/* stays dirty, retried on next nav */})
+          }
+        }
       },
 
       assignProductType: (itemId, productType) => {
+        const { orgId, activeShootId } = get()
         const shoot = get().getActiveShoot()
         const client = get().getClient(shoot?.clientId ?? null)
         const pt = client?.productTypes.find(p => p.name === productType)
         const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-        get().updateShootItems(
-          get().getItems().map(i => i.id === itemId ? { ...i, productType, requiredAngles } : i)
-        )
+        const items = get().getItems().map(i => i.id === itemId ? { ...i, productType, requiredAngles } : i)
+        get().updateShootItems(items)
         get().markDirty(itemId)
+        if (orgId && activeShootId) {
+          const updated = items.find(i => i.id === itemId)
+          if (updated) {
+            upsertItem(updated, activeShootId, orgId)
+              .then(() => get().clearDirty([itemId]))
+              .catch(() => {})
+          }
+        }
       },
 
       toggleAngle: (itemId, angle) => {
+        const { orgId, activeShootId } = get()
         const items = get().getItems().map(i => {
           if (i.id !== itemId) return i
           const completed = i.completedAngles.includes(angle)
@@ -386,19 +404,34 @@ const useAppStore = create<AppStore>()(
         })
         get().updateShootItems(items)
         get().markDirty(itemId)
+        if (orgId && activeShootId) {
+          const updated = items.find(i => i.id === itemId)
+          if (updated) {
+            upsertItem(updated, activeShootId, orgId)
+              .then(() => get().clearDirty([itemId]))
+              .catch(() => {})
+          }
+        }
       },
 
       bulkAssignProductType: (itemIds, productType) => {
+        const { orgId, activeShootId } = get()
         const shoot = get().getActiveShoot()
         const client = get().getClient(shoot?.clientId ?? null)
         const pt = client?.productTypes.find(p => p.name === productType)
         const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-        get().updateShootItems(
-          get().getItems().map(i =>
-            itemIds.includes(i.id) ? { ...i, productType, requiredAngles } : i
-          )
+        const allItems = get().getItems()
+        const updatedItems = allItems.map(i =>
+          itemIds.includes(i.id) ? { ...i, productType, requiredAngles } : i
         )
+        get().updateShootItems(updatedItems)
         itemIds.forEach(id => get().markDirty(id))
+        if (orgId && activeShootId) {
+          const toUpsert = updatedItems.filter(i => itemIds.includes(i.id))
+          upsertItems(toUpsert, activeShootId, orgId)
+            .then(() => get().clearDirty(itemIds))
+            .catch(() => {})
+        }
       },
 
       // ── Custody actions ───────────────────────────────────

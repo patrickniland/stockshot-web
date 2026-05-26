@@ -90,6 +90,9 @@ export async function pullSince(since: string | null): Promise<void> {
   const { orgId } = store
   if (!orgId) return
 
+  // If local store has no shoots, a partial pull is useless — fetch everything
+  if (store.savedShoots.length === 0) { await pullAll(); return }
+
   const pullId = ++activePullId
   store.setSyncStatus('syncing')
 
