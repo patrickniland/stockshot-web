@@ -1,7 +1,7 @@
 // StockShot — Navigation-based sync hook
 // Fires push-before-pull on page enter, push on page leave.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import useAppStore from '../store/useAppStore'
 import { pushDirty, pullSince, pullAll } from './useSupabaseSync'
 
@@ -11,16 +11,22 @@ interface NavSyncConfig {
 }
 
 export function useNavSync({ onEnter = null, onLeave = null }: NavSyncConfig) {
+  const didRun = useRef(false)
+
   useEffect(() => {
+    // Guard against React StrictMode double-invocation
+    if (didRun.current) return
+    didRun.current = true
+
     let cancelled = false
 
     async function enter() {
       if (!onEnter) return
 
-      const { dirtyItemIds, lastPulledAt } = useAppStore.getState()
+      const { dirtyItemIds, deletedShootIds, deletedClientIds, lastPulledAt } = useAppStore.getState()
 
-      // Push before pull — never pull over unsaved local changes
-      if (dirtyItemIds.length > 0) {
+      // Push before pull — never pull over unsaved local changes or pending deletes
+      if (dirtyItemIds.length > 0 || deletedShootIds.length > 0 || deletedClientIds.length > 0) {
         const { failed } = await pushDirty()
         if (cancelled) return
         if (failed.length > 0) {

@@ -8,9 +8,7 @@ import {
   fetchItemsForShoot,
   fetchClients,
   fetchItemsSince,
-  upsertShootMeta,
   upsertItem,
-  upsertClient,
   deleteShoot,
   deleteClientFromDB,
 } from '../lib/db'
@@ -23,7 +21,7 @@ let activePullId = 0
 // ── pushDirty ─────────────────────────────────────────────────────────────────
 export async function pushDirty(): Promise<{ pushed: number; failed: string[] }> {
   const store = useAppStore.getState()
-  const { dirtyItemIds, savedShoots, orgId, deletedShootIds, deletedClientIds, clients } = store
+  const { dirtyItemIds, savedShoots, orgId, deletedShootIds, deletedClientIds } = store
 
   if (!orgId) return { pushed: 0, failed: [] }
   if (dirtyItemIds.length === 0 && !deletedShootIds.length && !deletedClientIds.length) {
@@ -35,7 +33,7 @@ export async function pushDirty(): Promise<{ pushed: number; failed: string[] }>
   const pushed: string[] = []
   const failed: string[] = []
 
-  // Push dirty items
+  // Push only dirty stock items — never mass-upsert all shoots (causes last-write-wins conflicts)
   await Promise.all(dirtyItemIds.map(async (itemId) => {
     let foundItem = null
     let foundShootId = null
@@ -57,18 +55,18 @@ export async function pushDirty(): Promise<{ pushed: number; failed: string[] }>
 
   store.clearDirty(pushed)
 
-  // Push shoot metadata and client changes (lightweight)
+  // Process pending deletes and clear them so they don't fire again on next push
   try {
-    await Promise.all(savedShoots.map(s => upsertShootMeta(s, orgId)))
-    await Promise.all(clients.map(c => upsertClient(c, orgId)))
     if (deletedShootIds.length) {
       await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
+      store.clearDeletedShootIds(deletedShootIds)
     }
     if (deletedClientIds.length) {
       await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
+      store.clearDeletedClientIds(deletedClientIds)
     }
   } catch (e) {
-    console.error('[Sync] push metadata error:', e)
+    console.error('[Sync] push deletes error:', e)
   }
 
   const now = new Date().toISOString()

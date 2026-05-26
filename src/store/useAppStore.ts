@@ -7,7 +7,7 @@ import {
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertShootMeta } from '../lib/db'
 
 interface AppStore {
   clients: Client[]
@@ -101,6 +101,8 @@ interface AppStore {
   // Sync actions
   markDirty: (itemId: string) => void
   clearDirty: (itemIds: string[]) => void
+  clearDeletedShootIds: (ids: string[]) => void
+  clearDeletedClientIds: (ids: string[]) => void
   setSyncStatus: (status: 'idle' | 'syncing' | 'error') => void
   setLastSyncedAt: (ts: string | null) => void
   setLastPulledAt: (ts: string | null) => void
@@ -238,22 +240,26 @@ const useAppStore = create<AppStore>()(
 
       switchToShoot: (shoot) => set({ activeShootId: shoot.id, currentIntakeLook: 0 }),
 
-      softDeleteShoot: (shoot) => set(s => {
-        const updated = s.savedShoots.map(sh =>
-          sh.id === shoot.id ? { ...sh, deletedAt: new Date().toISOString() } : sh
-        )
+      softDeleteShoot: (shoot) => {
+        const { savedShoots, activeShootId, orgId } = get()
+        const updatedShoot = { ...shoot, deletedAt: new Date().toISOString() }
+        const updated = savedShoots.map(sh => sh.id === shoot.id ? updatedShoot : sh)
         const remaining = updated.filter(sh => !sh.deletedAt)
-        return {
+        set({
           savedShoots: updated,
-          activeShootId: s.activeShootId === shoot.id ? (remaining[0]?.id ?? null) : s.activeShootId,
-        }
-      }),
+          activeShootId: activeShootId === shoot.id ? (remaining[0]?.id ?? null) : activeShootId,
+        })
+        if (orgId) upsertShootMeta(updatedShoot, orgId).catch(e => console.error('[Sync] softDeleteShoot error:', e))
+      },
 
-      restoreShoot: (shoot) => set(s => ({
-        savedShoots: s.savedShoots.map(sh =>
-          sh.id === shoot.id ? { ...sh, deletedAt: null } : sh
-        ),
-      })),
+      restoreShoot: (shoot) => {
+        const { orgId } = get()
+        const updatedShoot = { ...shoot, deletedAt: null }
+        set(s => ({
+          savedShoots: s.savedShoots.map(sh => sh.id === shoot.id ? updatedShoot : sh),
+        }))
+        if (orgId) upsertShootMeta(updatedShoot, orgId).catch(e => console.error('[Sync] restoreShoot error:', e))
+      },
 
       permanentlyDeleteShoot: (shoot) => set(s => {
         const remaining = s.savedShoots.filter(sh => sh.id !== shoot.id)
@@ -274,12 +280,18 @@ const useAppStore = create<AppStore>()(
         }
       }),
 
-      renameActiveShoot: (name) => set(s => ({
-        savedShoots: s.savedShoots.map(sh =>
-          sh.id === s.activeShootId
-            ? { ...sh, name, updatedAt: new Date().toISOString() } : sh
-        ),
-      })),
+      renameActiveShoot: (name) => {
+        const { savedShoots, activeShootId, orgId } = get()
+        const now = new Date().toISOString()
+        const updated = savedShoots.map(sh =>
+          sh.id === activeShootId ? { ...sh, name, updatedAt: now } : sh
+        )
+        set({ savedShoots: updated })
+        if (orgId && activeShootId) {
+          const updatedShoot = updated.find(sh => sh.id === activeShootId)
+          if (updatedShoot) upsertShootMeta(updatedShoot, orgId).catch(e => console.error('[Sync] renameActiveShoot error:', e))
+        }
+      },
 
       updateShootItems: (items) => set(s => ({
         savedShoots: s.savedShoots.map(sh =>
@@ -604,6 +616,12 @@ const useAppStore = create<AppStore>()(
       })),
       clearDirty: (itemIds) => set(s => ({
         dirtyItemIds: s.dirtyItemIds.filter(id => !itemIds.includes(id)),
+      })),
+      clearDeletedShootIds: (ids) => set(s => ({
+        deletedShootIds: s.deletedShootIds.filter(id => !ids.includes(id)),
+      })),
+      clearDeletedClientIds: (ids) => set(s => ({
+        deletedClientIds: s.deletedClientIds.filter(id => !ids.includes(id)),
       })),
       setSyncStatus: (status) => set({ syncStatus: status }),
       setLastSyncedAt: (ts) => set({ lastSyncedAt: ts }),
