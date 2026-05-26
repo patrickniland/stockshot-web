@@ -79,9 +79,9 @@ export default function JobsView() {
             const canSwitch = !isActive
             const showDrops = expandedDrops === shoot.id
             const itemCount = shoot.items.length
-            const receivedCount = shoot.items.filter(i => i.status === 'received').length
-            const dispatchedCount = shoot.items.filter(i => i.status === 'dispatched').length
-            const pendingCount = shoot.items.filter(i => i.status === 'pending').length
+            const scannedIn = shoot.items.filter(i => i.lastScannedAt !== null).length
+            const atStudio = shoot.items.filter(i => i.custodyLocation === 'at_studio').length
+            const returned = shoot.items.filter(i => i.custodyLocation === 'at_client' && i.lastScannedAt !== null).length
             const shotCount = shoot.items.filter(i => i.shotStatus === 'shot').length
 
             return (
@@ -135,11 +135,11 @@ export default function JobsView() {
 
                     {/* Stats */}
                     <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: shoot.drops.length > 0 ? '8px' : 0 }}>
-                      <StatChip value={itemCount} label="Items" color="#1C1C1E" />
-                      <StatChip value={receivedCount} label="Received" color="#2E7D32" />
-                      <StatChip value={dispatchedCount} label="Dispatched" color="#1565C0" />
-                      {shoot.hasMeaningfulPending && <StatChip value={pendingCount} label="Outstanding" color="#E65100" />}
-                      <StatChip value={`${shotCount}/${itemCount}`} label="Shot" color="#7B1FA2" />
+                      <StatChip value={itemCount} label="Imported" color="#1C1C1E" />
+                      <StatChip value={scannedIn} label="Scanned In" color="#2E7D32" />
+                      <StatChip value={atStudio} label="At Studio" color="#1565C0" />
+                      <StatChip value={returned} label="Returned" color="#888" />
+                      <StatChip value={`${shotCount}/${scannedIn}`} label="Shot" color="#7B1FA2" />
                       <StatChip value={shoot.drops.length} label={`Drop${shoot.drops.length !== 1 ? 's' : ''}`} color="#666" />
                     </div>
 
