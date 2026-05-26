@@ -52,6 +52,7 @@ export default function StockListView() {
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
   const updateItem = useAppStore(s => s.updateItem)
+  const bulkAssignProductType = useAppStore(s => s.bulkAssignProductType)
   const clients = useAppStore(s => s.clients)
   const currentOperator = useAppStore(s => s.currentOperator)
   const bulkSetCustody = useAppStore(s => s.bulkSetCustody)
@@ -102,12 +103,8 @@ export default function StockListView() {
   }
 
   function applyBulkProductType() {
-    if (!bulkProductType || !activeShoot || selectedIds.size === 0) return
-    const pt = productTypes.find(p => p.name === bulkProductType)
-    const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-    updateShootItems(activeShoot.items.map(i =>
-      selectedIds.has(i.id) ? { ...i, productType: bulkProductType, requiredAngles, completedAngles: [] } : i
-    ))
+    if (!bulkProductType || selectedIds.size === 0) return
+    bulkAssignProductType([...selectedIds], bulkProductType)
     setSelectedIds(new Set())
     setBulkProductType('')
   }
