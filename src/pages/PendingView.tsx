@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 import { exportMissingItemsCSV } from '../lib/csvExport'
 import { exportMissingItemsPDF } from '../lib/pdfExporter'
 
 export default function PendingView() {
+  useNavSync({ onEnter: 'pull' })
   const [search, setSearch] = useState('')
   const [sortAsc, setSortAsc] = useState(true)
 

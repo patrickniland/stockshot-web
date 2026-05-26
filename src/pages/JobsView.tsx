@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 import { Shoot } from '../types'
 
 export default function JobsView() {
+  useNavSync({ onEnter: 'pull' })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [expandedDrops, setExpandedDrops] = useState<string | null>(null)

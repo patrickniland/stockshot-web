@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 import { StockItem, CustodyLocation, ShotStatus } from '../types'
 import { exportStockListCSV, exportDetailedStockListCSV } from '../lib/csvExport'
 import { exportStockListPDF } from '../lib/pdfExporter'
@@ -46,9 +47,11 @@ export default function StockListView() {
   // Bulk move-to-shoot
   const [moveToShootId, setMoveToShootId] = useState('')
 
+  useNavSync({ onEnter: 'pull', onLeave: 'push' })
+
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
-  const updateShootItems = useAppStore(s => s.updateShootItems)
+  const updateItem = useAppStore(s => s.updateItem)
   const clients = useAppStore(s => s.clients)
   const currentOperator = useAppStore(s => s.currentOperator)
   const bulkSetCustody = useAppStore(s => s.bulkSetCustody)
@@ -83,8 +86,7 @@ export default function StockListView() {
 
   function updateItemField(itemId: string, updates: Partial<StockItem>) {
     if (!activeShoot) return
-    const updated = activeShoot.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
-    updateShootItems(updated)
+    updateItem(itemId, updates)
   }
 
   function toggleSelect(id: string) {

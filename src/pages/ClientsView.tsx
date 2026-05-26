@@ -4,9 +4,11 @@
 import { useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 import { Client, ProductType, ShotAngle, Shoot } from '../types'
 
 export default function ClientsView() {
+  useNavSync({ onEnter: 'pull', onLeave: 'push' })
   const [editing, setEditing] = useState<Client | null>(null)
   const { clients, addClient, updateClient, deleteClient } = useAppStore()
   const addShootToList = useAppStore(s => s.addShootToList)

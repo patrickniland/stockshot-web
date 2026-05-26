@@ -1,6 +1,4 @@
 // StockShot — Global App State
-// Scans and changes update LOCAL state only.
-// Use Push/Pull buttons to sync with Supabase.
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -30,6 +28,12 @@ interface AppStore {
   managerPin: string
   stylingMode: boolean
 
+  // Sync tracking
+  dirtyItemIds: string[]
+  syncStatus: 'idle' | 'syncing' | 'error'
+  lastSyncedAt: string | null
+  lastPulledAt: string | null
+
   getActiveShoot: () => Shoot | null
   getItems: () => StockItem[]
   getShot: () => StockItem[]
@@ -41,7 +45,6 @@ interface AppStore {
   getTrashedShoots: () => Shoot[]
   findItemAcrossShoots: (itemId: string) => { item: StockItem; shootId: string } | null
 
-  // Legacy selectors — kept during transition, removed in Phase 6
   getPending: () => StockItem[]
   getReceived: () => StockItem[]
   getDispatched: () => StockItem[]
@@ -70,14 +73,12 @@ interface AppStore {
   toggleAngle: (itemId: string, angle: string) => void
   bulkAssignProductType: (itemIds: string[], productType: string) => void
 
-  // Custody actions
   setCustody: (itemId: string, location: CustodyLocation, operator: string, shootId?: string, notes?: string) => void
   bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string) => void
   moveItemsToShoot: (itemIds: string[], targetShootId: string) => void
   addItemToShoot: (item: StockItem, shootId: string) => void
   restoreItemState: (itemId: string, updates: Partial<StockItem>) => void
 
-  // Legacy scan actions — kept during transition, replaced in Phase 3/4
   scanIn: (sku: string) => void
   scanOut: (sku: string, to: string) => void
 
@@ -96,6 +97,14 @@ interface AppStore {
   setManagerPin: (val: string) => void
   setStylingMode: (val: boolean) => void
   resetStore: () => void
+
+  // Sync actions
+  markDirty: (itemId: string) => void
+  clearDirty: (itemIds: string[]) => void
+  setSyncStatus: (status: 'idle' | 'syncing' | 'error') => void
+  setLastSyncedAt: (ts: string | null) => void
+  setLastPulledAt: (ts: string | null) => void
+  mergeItems: (updates: Array<{ item: StockItem; shootId: string }>) => void
 }
 
 // ── Barcode normalisation ─────────────────────────────────────────────────────
@@ -145,6 +154,10 @@ const useAppStore = create<AppStore>()(
       shotListLocationFilter: 'all',
       managerPin: '',
       stylingMode: false,
+      dirtyItemIds: [],
+      syncStatus: 'idle',
+      lastSyncedAt: null,
+      lastPulledAt: null,
 
       // ── Derived ───────────────────────────────────────────
       getActiveShoot: () => {
@@ -174,7 +187,6 @@ const useAppStore = create<AppStore>()(
         return null
       },
 
-      // Legacy selectors
       getPending: () => get().getItems().filter(i => i.custodyLocation === 'at_client'),
       getReceived: () => get().getItems().filter(i => i.custodyLocation === 'at_studio'),
       getDispatched: () => get().getItems().filter(i => i.custodyLocation === 'at_client'),
@@ -327,6 +339,7 @@ const useAppStore = create<AppStore>()(
       updateItem: (itemId, updates) => {
         const items = get().getItems().map(i => i.id === itemId ? { ...i, ...updates } : i)
         get().updateShootItems(items)
+        get().markDirty(itemId)
       },
 
       assignProductType: (itemId, productType) => {
@@ -337,6 +350,7 @@ const useAppStore = create<AppStore>()(
         get().updateShootItems(
           get().getItems().map(i => i.id === itemId ? { ...i, productType, requiredAngles } : i)
         )
+        get().markDirty(itemId)
       },
 
       toggleAngle: (itemId, angle) => {
@@ -358,6 +372,7 @@ const useAppStore = create<AppStore>()(
           }
         })
         get().updateShootItems(items)
+        get().markDirty(itemId)
       },
 
       bulkAssignProductType: (itemIds, productType) => {
@@ -370,6 +385,7 @@ const useAppStore = create<AppStore>()(
             itemIds.includes(i.id) ? { ...i, productType, requiredAngles } : i
           )
         )
+        itemIds.forEach(id => get().markDirty(id))
       },
 
       // ── Custody actions ───────────────────────────────────
@@ -432,7 +448,6 @@ const useAppStore = create<AppStore>()(
 
         const movedItems: StockItem[] = []
 
-        // Remove items from their current shoots
         const withItemsRemoved = savedShoots.map(shoot => {
           const toMove = shoot.items.filter(i => itemIds.includes(i.id))
           if (toMove.length === 0) return shoot
@@ -440,7 +455,6 @@ const useAppStore = create<AppStore>()(
           return { ...shoot, items: shoot.items.filter(i => !itemIds.includes(i.id)) }
         })
 
-        // Add items to target shoot
         const updatedShoots = withItemsRemoved.map(shoot =>
           shoot.id === targetShootId
             ? { ...shoot, items: [...shoot.items, ...movedItems] }
@@ -487,7 +501,7 @@ const useAppStore = create<AppStore>()(
         }
       },
 
-      // ── Legacy scan actions (transition only) ─────────────
+      // ── Legacy scan actions ───────────────────────────────
       scanIn: (sku) => {
         const { getItems, updateShootItems, markShotOnScanIn, currentIntakeLook } = get()
         const items = getItems()
@@ -571,6 +585,7 @@ const useAppStore = create<AppStore>()(
       resetStore: () => set({
         clients: [], savedShoots: [], activeShootId: null, orgId: null,
         deletedShootIds: [], deletedClientIds: [], lastScanFeedback: null,
+        dirtyItemIds: [], syncStatus: 'idle', lastSyncedAt: null, lastPulledAt: null,
       }),
       setMarkShotOnScanIn: (val) => set({ markShotOnScanIn: val }),
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
@@ -581,6 +596,33 @@ const useAppStore = create<AppStore>()(
       setScanOutLocation: (val) => set({ scanOutLocation: val }),
       setCurrentOperator: (val) => set({ currentOperator: val }),
       setShotListLocationFilter: (val) => set({ shotListLocationFilter: val }),
+
+      markDirty: (itemId) => set(s => ({
+        dirtyItemIds: s.dirtyItemIds.includes(itemId)
+          ? s.dirtyItemIds
+          : [...s.dirtyItemIds, itemId],
+      })),
+      clearDirty: (itemIds) => set(s => ({
+        dirtyItemIds: s.dirtyItemIds.filter(id => !itemIds.includes(id)),
+      })),
+      setSyncStatus: (status) => set({ syncStatus: status }),
+      setLastSyncedAt: (ts) => set({ lastSyncedAt: ts }),
+      setLastPulledAt: (ts) => set({ lastPulledAt: ts }),
+      mergeItems: (updates) => set(s => ({
+        savedShoots: s.savedShoots.map(shoot => {
+          const shootUpdates = updates.filter(u => u.shootId === shoot.id)
+          if (!shootUpdates.length) return shoot
+          const existingIds = new Set(shoot.items.map(i => i.id))
+          const updatedItems = shoot.items.map(item => {
+            const found = shootUpdates.find(u => u.item.id === item.id)
+            return found ? { ...item, ...found.item } : item
+          })
+          const newItems = shootUpdates
+            .filter(u => !existingIds.has(u.item.id))
+            .map(u => u.item)
+          return { ...shoot, items: [...updatedItems, ...newItems] }
+        }),
+      })),
     }),
     {
       name: 'stockshot-v2',
@@ -594,6 +636,8 @@ const useAppStore = create<AppStore>()(
         currentOperator: s.currentOperator,
         managerPin: s.managerPin,
         stylingMode: s.stylingMode,
+        lastPulledAt: s.lastPulledAt,
+        lastSyncedAt: s.lastSyncedAt,
       }),
     }
   )

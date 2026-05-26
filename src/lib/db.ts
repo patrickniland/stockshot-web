@@ -193,6 +193,20 @@ export async function deleteClientFromDB(clientId: string): Promise<void> {
 
 // ── Mappers ───────────────────────────────────────────────────────────────────
 
+export async function fetchItemsSince(
+  orgId: string,
+  since: string
+): Promise<Array<StockItem & { shootId: string }>> {
+  const { data, error } = await supabase
+    .from('stock_items')
+    .select('*')
+    .eq('org_id', orgId)
+    .gt('updated_at', since)
+
+  if (error) throw error
+  return (data ?? []).map(row => ({ ...mapItemFromDB(row), shootId: row.shoot_id as string }))
+}
+
 function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
   return {
     id: item.id,
@@ -215,6 +229,7 @@ function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
     looks: item.looks,
     shot_at: item.shotAt,
     notes: item.notes,
+    updated_at: new Date().toISOString(),
   }
 }
 

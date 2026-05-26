@@ -1,8 +1,10 @@
 // StockShot — Dashboard / Reports View
 
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 
 export default function ReportsView() {
+  useNavSync({ onEnter: 'pull' })
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getItems        = useAppStore(s => s.getItems)
   const getShot         = useAppStore(s => s.getShot)

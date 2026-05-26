@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 import { StockItem, ShotStatus } from '../types'
 import { exportShotListCSV } from '../lib/csvExport'
 import { exportShotListPDF, exportLabelGridPDF, LabelOptions } from '../lib/pdfExporter'
@@ -10,6 +11,7 @@ import QRCode from '../components/QRCode'
 import LookBuilder from '../components/LookBuilder'
 
 export default function ShotListView() {
+  useNavSync({ onEnter: 'pull', onLeave: 'push' })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'notShot' | 'shot' | 'partial'>('all')
   const [groupBy, setGroupBy] = useState<'look' | 'productType' | 'none'>('look')

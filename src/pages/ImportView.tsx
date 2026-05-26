@@ -1,6 +1,7 @@
 // StockShot — Import View (fixed)
 
 import { useState, useRef } from 'react'
+import { useNavSync } from '../hooks/useNavSync'
 import { v4 as uuidv4 } from 'uuid'
 import { parseFileToRows, previewHeaders, importFromRows } from '../lib/importCoordinator'
 import { ColumnMapping, defaultColumnMapping } from '../types'
@@ -8,6 +9,7 @@ import useAppStore from '../store/useAppStore'
 import { upsertItems, upsertShootMeta } from '../lib/db'
 
 export default function ImportView() {
+  useNavSync({ onEnter: 'pull' })
   const [rows, setRows] = useState<string[][]>([])
   const [headers, setHeaders] = useState<string[]>([])
   const [mapping, setMapping] = useState<ColumnMapping>(defaultColumnMapping)

@@ -1,141 +1,173 @@
-// StockShot — Manual Sync Hook
-// No automatic loops. User controls when to push/pull.
-// On app load: fetch from Supabase once.
-// Push: save local state to Supabase on demand.
-// Pull: fetch latest from Supabase on demand.
+// StockShot — Sync Engine
+// Standalone functions (pushDirty, pullSince, pullAll) are called by useNavSync on navigation.
+// The hook handles startup-only: full pull on first load.
 
 import { useEffect, useRef, useState } from 'react'
 import {
   fetchShoots,
   fetchItemsForShoot,
   fetchClients,
+  fetchItemsSince,
   upsertShootMeta,
-  upsertItems,
+  upsertItem,
   upsertClient,
   deleteShoot,
   deleteClientFromDB,
 } from '../lib/db'
 import useAppStore from '../store/useAppStore'
 
-export type SyncStatus = 'idle' | 'pushing' | 'pulling' | 'error' | 'success'
+// ── Concurrency guard ─────────────────────────────────────────────────────────
+// Tracks in-flight pull so a newer nav can supersede an older one.
+let activePullId = 0
 
+// ── pushDirty ─────────────────────────────────────────────────────────────────
+export async function pushDirty(): Promise<{ pushed: number; failed: string[] }> {
+  const store = useAppStore.getState()
+  const { dirtyItemIds, savedShoots, orgId, deletedShootIds, deletedClientIds, clients } = store
+
+  if (!orgId) return { pushed: 0, failed: [] }
+  if (dirtyItemIds.length === 0 && !deletedShootIds.length && !deletedClientIds.length) {
+    return { pushed: 0, failed: [] }
+  }
+
+  store.setSyncStatus('syncing')
+
+  const pushed: string[] = []
+  const failed: string[] = []
+
+  // Push dirty items
+  await Promise.all(dirtyItemIds.map(async (itemId) => {
+    let foundItem = null
+    let foundShootId = null
+    for (const shoot of savedShoots) {
+      const item = shoot.items.find(i => i.id === itemId)
+      if (item) { foundItem = item; foundShootId = shoot.id; break }
+    }
+    if (!foundItem || !foundShootId) {
+      pushed.push(itemId) // item gone, remove from dirty
+      return
+    }
+    try {
+      await upsertItem(foundItem, foundShootId, orgId)
+      pushed.push(itemId)
+    } catch {
+      failed.push(itemId)
+    }
+  }))
+
+  store.clearDirty(pushed)
+
+  // Push shoot metadata and client changes (lightweight)
+  try {
+    await Promise.all(savedShoots.map(s => upsertShootMeta(s, orgId)))
+    await Promise.all(clients.map(c => upsertClient(c, orgId)))
+    if (deletedShootIds.length) {
+      await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
+    }
+    if (deletedClientIds.length) {
+      await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
+    }
+  } catch (e) {
+    console.error('[Sync] push metadata error:', e)
+  }
+
+  const now = new Date().toISOString()
+  if (failed.length === 0) {
+    store.setSyncStatus('idle')
+    store.setLastSyncedAt(now)
+    store.setLastPulledAt(now)
+  } else {
+    store.setSyncStatus('error')
+  }
+
+  return { pushed: pushed.length, failed }
+}
+
+// ── pullSince ─────────────────────────────────────────────────────────────────
+export async function pullSince(since: string | null): Promise<void> {
+  if (!since) { await pullAll(); return }
+
+  const store = useAppStore.getState()
+  const { orgId } = store
+  if (!orgId) return
+
+  const pullId = ++activePullId
+  store.setSyncStatus('syncing')
+
+  try {
+    const updatedItems = await fetchItemsSince(orgId, since)
+    if (pullId !== activePullId) return // superseded
+
+    store.mergeItems(updatedItems)
+    const now = new Date().toISOString()
+    store.setLastPulledAt(now)
+    store.setLastSyncedAt(now)
+    store.setSyncStatus('idle')
+  } catch (e) {
+    if (pullId !== activePullId) return
+    console.error('[Sync] pullSince failed:', e)
+    store.setSyncStatus('error')
+  }
+}
+
+// ── pullAll ───────────────────────────────────────────────────────────────────
+export async function pullAll(): Promise<void> {
+  const store = useAppStore.getState()
+  const { orgId, activeShootId } = store
+  if (!orgId) return
+
+  const pullId = ++activePullId
+  store.setSyncStatus('syncing')
+
+  try {
+    const [shootMetas, clients] = await Promise.all([
+      fetchShoots(orgId),
+      fetchClients(orgId),
+    ])
+
+    if (pullId !== activePullId) return
+
+    const shoots = await Promise.all(
+      shootMetas.map(async meta => ({
+        ...meta,
+        items: await fetchItemsForShoot(meta.id),
+      }))
+    )
+
+    if (pullId !== activePullId) return
+
+    store.setShoots(shoots)
+    store.setClients(clients)
+
+    const activeShoots = shoots.filter(s => !s.deletedAt)
+    if (activeShoots.length > 0) {
+      const currentExists = activeShoots.some(s => s.id === activeShootId)
+      if (!activeShootId || !currentExists) {
+        store.setActiveShootId(activeShoots[0].id)
+      }
+    }
+
+    const now = new Date().toISOString()
+    store.setLastPulledAt(now)
+    store.setLastSyncedAt(now)
+    store.setSyncStatus('idle')
+  } catch (e) {
+    if (pullId !== activePullId) return
+    console.error('[Sync] pullAll failed:', e)
+    store.setSyncStatus('error')
+  }
+}
+
+// ── Hook (startup only) ───────────────────────────────────────────────────────
 export function useSupabaseSync(orgId: string | null) {
   const [loaded, setLoaded] = useState(false)
-  const [status, setStatus] = useState<SyncStatus>('idle')
   const loadedRef = useRef(false)
 
-  const setShoots = useAppStore(s => s.setShoots)
-  const setClients = useAppStore(s => s.setClients)
-  const activeShootId = useAppStore(s => s.activeShootId)
-  const setActiveShootId = useAppStore(s => s.setActiveShootId)
-
-  // ── Load on startup (once only) ───────────────────────────────────────────
   useEffect(() => {
     if (!orgId || loadedRef.current) return
     loadedRef.current = true
-
-    async function loadAll() {
-      setStatus('pulling')
-      try {
-        const [shootMetas, clients] = await Promise.all([
-          fetchShoots(orgId!),
-          fetchClients(orgId!),
-        ])
-
-        const shoots = await Promise.all(
-          shootMetas.map(async meta => ({
-            ...meta,
-            items: await fetchItemsForShoot(meta.id),
-          }))
-        )
-
-        setShoots(shoots)
-        setClients(clients)
-
-        const activeShoots = shoots.filter(s => !s.deletedAt)
-        if (activeShoots.length > 0) {
-          const currentExists = activeShoots.some(s => s.id === activeShootId)
-          if (!activeShootId || !currentExists) {
-            setActiveShootId(activeShoots[0].id)
-          }
-        }
-
-        setStatus('success')
-        setTimeout(() => setStatus('idle'), 2000)
-      } catch (e) {
-        console.error('[Sync] Load failed:', e)
-        setStatus('error')
-      } finally {
-        setLoaded(true)
-      }
-    }
-
-    loadAll()
+    pullAll().finally(() => setLoaded(true))
   }, [orgId])
 
-  // ── Push: save local state to Supabase ────────────────────────────────────
-  async function push() {
-    if (!orgId) return
-    setStatus('pushing')
-    try {
-      const { savedShoots, clients, deletedShootIds, deletedClientIds } = useAppStore.getState()
-
-      // Save shoot metadata
-      await Promise.all(savedShoots.map(s => upsertShootMeta(s, orgId)))
-
-      // Save all items for each shoot
-      await Promise.all(
-        savedShoots.map(s => upsertItems(s.items, s.id, orgId))
-      )
-
-      // Save clients
-      await Promise.all(clients.map(c => upsertClient(c, orgId)))
-
-      // Delete removed shoots and clients
-      if (deletedShootIds?.length) {
-        await Promise.all(deletedShootIds.map(id => deleteShoot(id)))
-      }
-      if (deletedClientIds?.length) {
-        await Promise.all(deletedClientIds.map(id => deleteClientFromDB(id)))
-      }
-
-      setStatus('success')
-      setTimeout(() => setStatus('idle'), 2000)
-    } catch (e) {
-      console.error('[Sync] Push failed:', e)
-      setStatus('error')
-      setTimeout(() => setStatus('idle'), 3000)
-    }
-  }
-
-  // ── Pull: fetch latest from Supabase ──────────────────────────────────────
-  async function pull() {
-    if (!orgId) return
-    setStatus('pulling')
-    try {
-      const [shootMetas, clients] = await Promise.all([
-        fetchShoots(orgId),
-        fetchClients(orgId),
-      ])
-
-      const shoots = await Promise.all(
-        shootMetas.map(async meta => ({
-          ...meta,
-          items: await fetchItemsForShoot(meta.id),
-        }))
-      )
-
-      setShoots(shoots)
-      setClients(clients)
-
-      setStatus('success')
-      setTimeout(() => setStatus('idle'), 2000)
-    } catch (e) {
-      console.error('[Sync] Pull failed:', e)
-      setStatus('error')
-      setTimeout(() => setStatus('idle'), 3000)
-    }
-  }
-
-  return { loaded, status, push, pull }
+  return { loaded }
 }

@@ -1,8 +1,8 @@
 // StockShot — Layout with Sidebar Navigation
 
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
-import { Session } from '@supabase/supabase-js'
 import { Session } from '@supabase/supabase-js'
 
 const NAV = [
@@ -18,13 +18,53 @@ const NAV = [
   { to: '/management', icon: '⚙', label: 'Management' },
 ]
 
-export default function Layout({ children, session, onSignOut, onPush, onPull, syncStatus }: { 
+function formatAgo(ts: string | null): string {
+  if (!ts) return ''
+  const secs = (Date.now() - new Date(ts).getTime()) / 1000
+  if (secs < 10) return 'just now'
+  if (secs < 60) return `${Math.round(secs)}s ago`
+  if (secs < 3600) return `${Math.round(secs / 60)} min ago`
+  return `${Math.round(secs / 3600)}h ago`
+}
+
+function SyncIndicator() {
+  const syncStatus = useAppStore(s => s.syncStatus)
+  const lastSyncedAt = useAppStore(s => s.lastSyncedAt)
+  const [, tick] = useState(0)
+
+  // Refresh "X ago" display every 30s
+  useEffect(() => {
+    const id = setInterval(() => tick(n => n + 1), 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  let text = ''
+  let color = '#555'
+
+  if (syncStatus === 'syncing') {
+    text = 'Syncing…'
+    color = '#7BB8F0'
+  } else if (syncStatus === 'error') {
+    text = 'Sync failed — retrying'
+    color = '#ff6b6b'
+  } else if (lastSyncedAt) {
+    text = `Synced ${formatAgo(lastSyncedAt)}`
+    color = '#555'
+  }
+
+  if (!text) return null
+
+  return (
+    <div style={{ padding: '4px 12px 8px', fontSize: '10px', color, textAlign: 'center' }}>
+      {text}
+    </div>
+  )
+}
+
+export default function Layout({ children, session, onSignOut }: {
   children: React.ReactNode
   session?: Session | null
   onSignOut?: () => void
-  onPush?: () => void
-  onPull?: () => void
-  syncStatus?: string
 }) {
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getStudioQueue = useAppStore(s => s.getStudioQueue)
@@ -115,67 +155,8 @@ export default function Layout({ children, session, onSignOut, onPush, onPull, s
           })}
         </nav>
 
-        {/* User strip */}
-        {session && (
-          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {session.user.user_metadata?.avatar_url && (
-              <img src={session.user.user_metadata.avatar_url} style={{ width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0 }} alt="" />
-            )}
-            <span style={{ fontSize: '10px', color: '#666', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {session.user.user_metadata?.full_name || session.user.email}
-            </span>
-            <button onClick={onSignOut} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}
-              title="Sign out">
-              ↪
-            </button>
-          </div>
-        )}
-
-        {/* Sync buttons */}
-        {onPush && (
-          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', gap: '6px' }}>
-            <button onClick={onPull} style={{
-              flex: 1, padding: '6px', background: '#1a3a5c', border: 'none',
-              borderRadius: '5px', color: '#7BB8F0', fontSize: '11px',
-              cursor: 'pointer', fontWeight: 500,
-            }}>
-              ↓ Pull
-            </button>
-            <button onClick={onPush} style={{
-              flex: 1, padding: '6px', background: '#1a3a1a', border: 'none',
-              borderRadius: '5px', color: '#7BF07B', fontSize: '11px',
-              cursor: 'pointer', fontWeight: 500,
-            }}>
-              ↑ Push
-            </button>
-          </div>
-        )}
-        {syncStatus && syncStatus !== 'idle' && (
-          <div style={{
-            padding: '4px 12px', fontSize: '10px', textAlign: 'center',
-            color: syncStatus === 'error' ? '#ff6b6b' : syncStatus === 'success' ? '#7BF07B' : '#aaa',
-          }}>
-            {syncStatus === 'pushing' ? '↑ Pushing...' :
-             syncStatus === 'pulling' ? '↓ Pulling...' :
-             syncStatus === 'success' ? '✓ Done' :
-             syncStatus === 'error' ? '✗ Sync failed' : ''}
-          </div>
-        )}
-
-        {/* User strip */}
-        {session && (
-          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {session.user.user_metadata?.avatar_url && (
-              <img src={session.user.user_metadata.avatar_url} style={{ width: '22px', height: '22px', borderRadius: '50%' }} alt="" />
-            )}
-            <span style={{ fontSize: '10px', color: '#666', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {session.user.user_metadata?.full_name || session.user.email}
-            </span>
-            <button onClick={onSignOut} title="Sign out" style={{
-              background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '12px',
-            }}>↪</button>
-          </div>
-        )}
+        {/* Sync indicator */}
+        <SyncIndicator />
 
         {/* Active shoot strip */}
         {activeShoot && (
@@ -194,6 +175,22 @@ export default function Layout({ children, session, onSignOut, onPush, onPull, s
             </span>
             <span style={{ fontSize: '10px', color: '#555' }}>›</span>
           </NavLink>
+        )}
+
+        {/* User strip */}
+        {session && (
+          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {session.user.user_metadata?.avatar_url && (
+              <img src={session.user.user_metadata.avatar_url} style={{ width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0 }} alt="" />
+            )}
+            <span style={{ fontSize: '10px', color: '#666', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {session.user.user_metadata?.full_name || session.user.email}
+            </span>
+            <button onClick={onSignOut} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '12px', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}
+              title="Sign out">
+              ↪
+            </button>
+          </div>
         )}
       </div>
 

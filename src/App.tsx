@@ -1,10 +1,10 @@
-// StockShot — App Entry with Auth + Manual Sync
+// StockShot — App Entry with Auth + Nav-based Auto Sync
 
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { getOrCreateOrg, signOut } from './lib/auth'
-import { useSupabaseSync } from './hooks/useSupabaseSync'
+import { useSupabaseSync, pushDirty } from './hooks/useSupabaseSync'
 import useAppStore from './store/useAppStore'
 import Layout from './components/Layout'
 import LoginView from './pages/LoginView'
@@ -24,7 +24,7 @@ function AppWithSync({ session }: { session: Session }) {
   const orgId = useAppStore(s => s.orgId)
   const setOrgId = useAppStore(s => s.setOrgId)
   const migrateLocations = useAppStore(s => s.migrateLocations)
-  const { status, push, pull } = useSupabaseSync(orgId)
+  useSupabaseSync(orgId)
 
   useEffect(() => { migrateLocations() }, [])
 
@@ -45,15 +45,21 @@ function AppWithSync({ session }: { session: Session }) {
     initOrg()
   }, [session.user.id])
 
+  // Best-effort push of dirty items on tab close
+  useEffect(() => {
+    function handleBeforeUnload() {
+      const { dirtyItemIds } = useAppStore.getState()
+      if (dirtyItemIds.length > 0) {
+        pushDirty().catch(() => {/* best-effort */})
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
   return (
     <BrowserRouter>
-      <Layout
-        session={session}
-        onSignOut={signOut}
-        onPush={push}
-        onPull={pull}
-        syncStatus={status}
-      >
+      <Layout session={session} onSignOut={signOut}>
         <Routes>
           <Route path="/" element={<Navigate to="/import" replace />} />
           <Route path="/import" element={<ImportView />} />

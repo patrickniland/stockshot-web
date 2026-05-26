@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import useAppStore from '../store/useAppStore'
+import { useNavSync } from '../hooks/useNavSync'
 import { StockItem, CustodyLocation, CustodyEvent } from '../types'
 import CameraScanner from '../components/CameraScanner'
 import ShootPicker from '../components/ShootPicker'
@@ -65,6 +66,7 @@ const LOCATION_ICON: Record<CustodyLocation, string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ScanInView() {
+  useNavSync({ onEnter: 'pull' })
   const inputRef = useRef<HTMLInputElement>(null)
   const [scanInput, setScanInput] = useState('')
   const [showCamera, setShowCamera] = useState(false)

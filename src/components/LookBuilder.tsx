@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { StockItem } from '../types'
+import { useNavSync } from '../hooks/useNavSync'
 
 interface Props {
   items: StockItem[]
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook, onClose }: Props) {
+  useNavSync({ onEnter: 'pull', onLeave: 'push' })
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLook, setBulkLook] = useState<string>('')
