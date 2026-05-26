@@ -121,16 +121,17 @@ export async function updateItemCustody(
   updates: {
     custodyLocation: CustodyLocation
     custodyHistory: CustodyEvent[]
-    lastScannedAt: string
-    lastScannedBy: string
+    lastScannedAt?: string
+    lastScannedBy?: string
   }
 ): Promise<void> {
-  const { error } = await supabase.from('stock_items').update({
+  const payload: Record<string, unknown> = {
     custody_location: updates.custodyLocation,
     custody_history: updates.custodyHistory,
-    last_scanned_at: updates.lastScannedAt,
-    last_scanned_by: updates.lastScannedBy,
-  }).eq('id', itemId)
+  }
+  if (updates.lastScannedAt) payload.last_scanned_at = updates.lastScannedAt
+  if (updates.lastScannedBy) payload.last_scanned_by = updates.lastScannedBy
+  const { error } = await supabase.from('stock_items').update(payload).eq('id', itemId)
   if (error) throw error
 }
 

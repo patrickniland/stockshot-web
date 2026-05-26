@@ -82,8 +82,8 @@ export default function ScanInView() {
   const currentIntakeLook = useAppStore(s => s.currentIntakeLook)
   const setCurrentIntakeLook = useAppStore(s => s.setCurrentIntakeLook)
   const bumpLook = useAppStore(s => s.bumpLook)
-  const markShotOnScanIn = useAppStore(s => s.markShotOnScanIn)
-  const setMarkShotOnScanIn = useAppStore(s => s.setMarkShotOnScanIn)
+  const stylingMode = useAppStore(s => s.stylingMode)
+  const setStylingMode = useAppStore(s => s.setStylingMode)
   const setCustody = useAppStore(s => s.setCustody)
   const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
@@ -194,15 +194,8 @@ export default function ScanInView() {
 
     setCustody(item.id, scanInLocation, currentOperator, shootId)
 
-    if (markShotOnScanIn) {
-      // Also mark shot — done via restoreItemState to avoid double-write
-      const { updateItem } = useAppStore.getState()
-      updateItem(item.id, {
-        looks,
-        shotStatus: 'shot',
-        shotAt: now,
-        completedAngles: item.requiredAngles,
-      })
+    if (stylingMode) {
+      useAppStore.getState().updateItem(item.id, { looks, shotStatus: 'notRequired' })
     } else if (looks !== item.looks) {
       useAppStore.getState().updateItem(item.id, { looks })
     }
@@ -223,7 +216,7 @@ export default function ScanInView() {
     setLastScanFeedback({
       id: Date.now().toString(),
       type: 'success',
-      message: markShotOnScanIn ? `${locationLabel(scanInLocation)} + Shot` : locationLabel(scanInLocation),
+      message: stylingMode ? 'Confirmed for Styling' : locationLabel(scanInLocation),
       scannedValue: item.styleNumber || item.qrCodeValue,
     })
   }
@@ -259,8 +252,8 @@ export default function ScanInView() {
       custodyHistory: [event],
       lastScannedAt: now,
       lastScannedBy: currentOperator,
-      shotStatus: markShotOnScanIn ? 'shot' : 'notShot',
-      shotAt: markShotOnScanIn ? now : null,
+      shotStatus: stylingMode ? 'notRequired' : 'notShot',
+      shotAt: null,
       productType: null,
       requiredAngles: [],
       completedAngles: [],
@@ -344,7 +337,7 @@ export default function ScanInView() {
       </div>
 
       {/* Controls + Scanner card */}
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem', border: `1.5px solid ${markShotOnScanIn ? '#7B1FA2' : '#E0E0E0'}` }}>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem', border: `1.5px solid ${stylingMode ? '#F59E0B' : '#E0E0E0'}` }}>
         <p style={{ fontSize: '17px', fontWeight: 600, color: '#111', textAlign: 'center', marginBottom: '14px' }}>Scan In</p>
 
         {/* Operator */}
@@ -406,13 +399,32 @@ export default function ScanInView() {
           </div>
         </ControlRow>
 
-        {/* Mark as shot */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={markShotOnScanIn} onChange={e => setMarkShotOnScanIn(e.target.checked)} />
-          <span style={{ fontSize: '12px', color: markShotOnScanIn ? '#7B1FA2' : '#444', fontWeight: markShotOnScanIn ? 600 : 400 }}>
-            Mark as Shot on scan-in
-          </span>
-        </label>
+        {/* Styling Mode toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <button
+            onClick={() => setStylingMode(!stylingMode)}
+            style={{
+              flex: 1, padding: '7px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 600,
+              border: `1.5px solid ${stylingMode ? '#F59E0B' : '#E0E0E0'}`,
+              background: stylingMode ? '#FFF8E1' : '#F9F9F9',
+              color: stylingMode ? '#B45309' : '#666',
+              cursor: 'pointer',
+            }}
+          >
+            {stylingMode ? '✦ Styling Mode ON' : 'Enter Styling Mode'}
+          </button>
+          {stylingMode && (
+            <button
+              onClick={() => setStylingMode(false)}
+              style={{
+                padding: '7px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
+                background: '#F59E0B', border: 'none', color: '#fff', cursor: 'pointer',
+              }}
+            >
+              EXIT
+            </button>
+          )}
+        </div>
 
         <hr style={{ border: 'none', borderTop: '1px solid #F0F0F0', marginBottom: '14px' }} />
 
@@ -442,7 +454,7 @@ export default function ScanInView() {
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={triggerScan} disabled={!canScan || !scanInput.trim()} style={{
             flex: 1, padding: '10px', fontSize: '14px', fontWeight: 600,
-            background: (!canScan || !scanInput.trim()) ? '#E0E0E0' : markShotOnScanIn ? '#7B1FA2' : '#2E7D32',
+            background: (!canScan || !scanInput.trim()) ? '#E0E0E0' : stylingMode ? '#F59E0B' : '#2E7D32',
             color: (!canScan || !scanInput.trim()) ? '#999' : '#fff',
             border: 'none', borderRadius: '8px', cursor: (canScan && scanInput.trim()) ? 'pointer' : 'default',
           }}>
@@ -473,7 +485,8 @@ export default function ScanInView() {
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          background: lastScanFeedback.type === 'success' ? '#2E7D32'
+          background: lastScanFeedback.type === 'success'
+            ? (stylingMode ? '#F59E0B' : '#2E7D32')
             : lastScanFeedback.type === 'alreadyAtLocation' ? '#E65100'
             : '#B71C1C',
         }}>

@@ -28,6 +28,7 @@ interface AppStore {
   currentOperator: string
   shotListLocationFilter: CustodyLocation | 'all'
   managerPin: string
+  stylingMode: boolean
 
   getActiveShoot: () => Shoot | null
   getItems: () => StockItem[]
@@ -93,6 +94,8 @@ interface AppStore {
   setCurrentOperator: (val: string) => void
   setShotListLocationFilter: (val: CustodyLocation | 'all') => void
   setManagerPin: (val: string) => void
+  setStylingMode: (val: boolean) => void
+  resetStore: () => void
 }
 
 // ── Barcode normalisation ─────────────────────────────────────────────────────
@@ -141,6 +144,7 @@ const useAppStore = create<AppStore>()(
       currentOperator: '',
       shotListLocationFilter: 'all',
       managerPin: '',
+      stylingMode: false,
 
       // ── Derived ───────────────────────────────────────────
       getActiveShoot: () => {
@@ -477,8 +481,8 @@ const useAppStore = create<AppStore>()(
           updateItemCustody(itemId, {
             custodyLocation: updates.custodyLocation,
             custodyHistory: updates.custodyHistory ?? [],
-            lastScannedAt: updates.lastScannedAt ?? '',
-            lastScannedBy: updates.lastScannedBy ?? '',
+            lastScannedAt: updates.lastScannedAt,
+            lastScannedBy: updates.lastScannedBy,
           }).catch(e => console.error('[Sync] restoreItemState error:', e))
         }
       },
@@ -564,10 +568,15 @@ const useAppStore = create<AppStore>()(
       setClients: (clients) => set({ clients }),
       setActiveShootId: (id) => set({ activeShootId: id }),
       setOrgId: (id) => set({ orgId: id }),
+      resetStore: () => set({
+        clients: [], savedShoots: [], activeShootId: null, orgId: null,
+        deletedShootIds: [], deletedClientIds: [], lastScanFeedback: null,
+      }),
       setMarkShotOnScanIn: (val) => set({ markShotOnScanIn: val }),
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
       setLastScanFeedback: (val) => set({ lastScanFeedback: val }),
       setManagerPin: (val) => set({ managerPin: val }),
+      setStylingMode: (val) => set({ stylingMode: val }),
       setScanInLocation: (val) => set({ scanInLocation: val }),
       setScanOutLocation: (val) => set({ scanOutLocation: val }),
       setCurrentOperator: (val) => set({ currentOperator: val }),
@@ -584,6 +593,7 @@ const useAppStore = create<AppStore>()(
         scanOutLocation: s.scanOutLocation,
         currentOperator: s.currentOperator,
         managerPin: s.managerPin,
+        stylingMode: s.stylingMode,
       }),
     }
   )

@@ -100,7 +100,7 @@ export default function ScanOutView() {
   const allItems = activeShoots.flatMap(s => s.items)
   const atStudioCount  = allItems.filter(i => i.custodyLocation === 'at_studio').length
   const inTransitCount = allItems.filter(i => i.custodyLocation === 'in_transit').length
-  const atClientCount  = allItems.filter(i => i.custodyLocation === 'at_client').length
+  const atClientCount  = allItems.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
 
   const panelItems = shootItems.filter(i => {
     if (i.custodyLocation !== activeStatView) return false
