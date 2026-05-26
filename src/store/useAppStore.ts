@@ -320,33 +320,56 @@ const useAppStore = create<AppStore>()(
         ),
       })),
 
-      bumpLook: () => set(s => {
-        const newLook = s.currentIntakeLook + 1
-        const savedShoots = s.savedShoots.map(sh => {
-          if (sh.id !== s.activeShootId) return sh
+      bumpLook: () => {
+        const { savedShoots, activeShootId, orgId, currentIntakeLook } = get()
+        const newLook = currentIntakeLook + 1
+        const updated = savedShoots.map(sh => {
+          if (sh.id !== activeShootId) return sh
           const lookOrder = sh.lookOrder.includes(newLook)
             ? sh.lookOrder
             : [...sh.lookOrder, newLook].sort((a, b) => a - b)
           return { ...sh, lookOrder, updatedAt: new Date().toISOString() }
         })
-        return { currentIntakeLook: newLook, savedShoots }
-      }),
+        set({ currentIntakeLook: newLook, savedShoots: updated })
+        if (orgId && activeShootId) {
+          const updatedShoot = updated.find(sh => sh.id === activeShootId)
+          if (updatedShoot) {
+            upsertShootMeta(updatedShoot, orgId)
+              .catch(e => console.error('[Sync] bumpLook error:', e))
+          }
+        }
+      },
 
-      reorderLook: (lookA, lookB) => set(s => {
-        const sh = s.savedShoots.find(x => x.id === s.activeShootId)
-        if (!sh) return s
+      reorderLook: (lookA, lookB) => {
+        const { savedShoots, activeShootId, orgId } = get()
+        const sh = savedShoots.find(x => x.id === activeShootId)
+        if (!sh || !activeShootId) return
         const swap = (n: number) => n === lookA ? lookB : n === lookB ? lookA : n
         const items = sh.items.map(item => ({
           ...item,
           looks: item.looks.map(swap).sort((a, b) => a - b),
         }))
         const lookOrder = sh.lookOrder.map(swap).sort((a, b) => a - b)
-        return {
-          savedShoots: s.savedShoots.map(x =>
-            x.id === s.activeShootId ? { ...x, items, lookOrder, updatedAt: new Date().toISOString() } : x
-          ),
+        const updatedShoot = { ...sh, items, lookOrder, updatedAt: new Date().toISOString() }
+        set({
+          savedShoots: savedShoots.map(x => x.id === activeShootId ? updatedShoot : x),
+        })
+        if (orgId) {
+          upsertShootMeta(updatedShoot, orgId)
+            .catch(e => console.error('[Sync] reorderLook shoot error:', e))
+          // Only push items whose looks array actually changed
+          const changedItemIds = sh.items
+            .filter(i => i.looks.includes(lookA) !== i.looks.includes(lookB))
+            .map(i => i.id)
+          if (changedItemIds.length > 0) {
+            changedItemIds.forEach(id => get().markDirty(id))
+            const changedItems = items.filter(i => changedItemIds.includes(i.id))
+            upsertItems(changedItems, activeShootId, orgId)
+              .then(() => get().clearDirty(changedItemIds))
+              .catch(() => {/* stays dirty, retried on next nav */})
+          }
         }
-      }),
+      },
 
       // ── Item actions ──────────────────────────────────────
       updateItem: (itemId, updates) => {
