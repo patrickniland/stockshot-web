@@ -33,8 +33,9 @@ export default function ShotListView() {
   const savedShoots = useAppStore(s => s.savedShoots)
   const bumpLook = useAppStore(s => s.bumpLook)
   const activeShootId = useAppStore(s => s.activeShootId)
-  const updateShootItems = useAppStore(s => s.updateShootItems)
   const storeUpdateItem = useAppStore(s => s.updateItem)
+  const storeToggleAngle = useAppStore(s => s.toggleAngle)
+  const storeAssignProductType = useAppStore(s => s.assignProductType)
   const reorderLook = useAppStore(s => s.reorderLook)
   const clients = useAppStore(s => s.clients)
   const shotListLocationFilter = useAppStore(s => s.shotListLocationFilter)
@@ -68,33 +69,8 @@ export default function ShotListView() {
     return i.styleNumber.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q) || (i.description || '').toLowerCase().includes(q)
   })
 
-  function updateItem(itemId: string, updates: Partial<StockItem>) {
-    if (!shoot) return
-    const updated = shoot.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
-    updateShootItems(updated)
-  }
-
-  function toggleAngle(itemId: string, angle: string) {
-    if (!shoot) return
-    const item = shoot.items.find(i => i.id === itemId)
-    if (!item) return
-    const completed = item.completedAngles.includes(angle)
-      ? item.completedAngles.filter(a => a !== angle)
-      : [...item.completedAngles, angle]
-    const allDone = item.requiredAngles.length > 0 && item.requiredAngles.every(a => completed.includes(a))
-    // If all angles done → Shot. If any angle removed → revert to Not Shot (unless manually overridden to N/A)
-    const newShotStatus = allDone ? 'shot' : item.shotStatus === 'notRequired' ? 'notRequired' : 'notShot'
-    updateItem(itemId, {
-      completedAngles: completed,
-      shotStatus: newShotStatus,
-      shotAt: allDone ? new Date().toISOString() : null,
-    })
-  }
-
   function assignProductType(itemId: string, productType: string) {
-    const pt = productTypes.find(p => p.name === productType)
-    const requiredAngles = pt?.requiredAngles.map(a => a.name) ?? []
-    updateItem(itemId, { productType, requiredAngles, completedAngles: [] })
+    storeAssignProductType(itemId, productType)
   }
 
   async function handleLabelExport() {
@@ -237,8 +213,8 @@ export default function ShotListView() {
                 productTypes={productTypes.map(p => p.name)}
                 locationFilter={shotListLocationFilter}
                 onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                onAngleToggle={angle => toggleAngle(item.id, angle)}
-                onShotStatusChange={s => updateItem(item.id, { shotStatus: s })}
+                onAngleToggle={angle => storeToggleAngle(item.id, angle)}
+                onShotStatusChange={s => storeUpdateItem(item.id, { shotStatus: s })}
                 onAssignProductType={pt => assignProductType(item.id, pt)}
               />
             ))}
