@@ -196,7 +196,7 @@ export async function deleteClientFromDB(clientId: string): Promise<void> {
 export async function fetchItemsSince(
   orgId: string,
   since: string
-): Promise<Array<StockItem & { shootId: string }>> {
+): Promise<Array<{ item: StockItem; shootId: string }>> {
   const { data, error } = await supabase
     .from('stock_items')
     .select('*')
@@ -204,7 +204,7 @@ export async function fetchItemsSince(
     .gt('updated_at', since)
 
   if (error) throw error
-  return (data ?? []).map(row => ({ ...mapItemFromDB(row), shootId: row.shoot_id as string }))
+  return (data ?? []).map(row => ({ item: mapItemFromDB(row), shootId: row.shoot_id as string }))
 }
 
 function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
