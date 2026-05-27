@@ -214,7 +214,14 @@ export default function ShotListView() {
                 locationFilter={shotListLocationFilter}
                 onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                 onAngleToggle={angle => storeToggleAngle(item.id, angle)}
-                onShotStatusChange={s => storeUpdateItem(item.id, { shotStatus: s })}
+                onShotStatusChange={s => {
+                  const now = new Date().toISOString()
+                  storeUpdateItem(item.id, {
+                    shotStatus: s,
+                    shotAt: s === 'shot' ? now : null,
+                    completedAngles: s === 'shot' ? item.requiredAngles : [],
+                  })
+                }}
                 onAssignProductType={pt => assignProductType(item.id, pt)}
               />
             ))}
