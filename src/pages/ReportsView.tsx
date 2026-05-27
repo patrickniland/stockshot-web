@@ -14,18 +14,24 @@ export default function ReportsView() {
   const items      = getItems()
   const shot       = getShot()
   const total      = items.length
+
+  // Mapped = imported but not yet scanned in (no custody history)
+  const mapped     = items.filter(i => (i.custodyHistory ?? []).length === 0).length
+  // Active = has been scanned at least once
+  const active     = items.filter(i => (i.custodyHistory ?? []).length > 0).length
+
   const notRequired = items.filter(i => i.shotStatus === 'notRequired').length
 
-  // Scanned in = any item touched by scanning (lastScannedAt set)
-  const scannedIn  = items.filter(i => i.lastScannedAt !== null).length
-
-  // Custody breakdown (only meaningful for scanned items)
+  // Custody breakdown (active items only)
   const atStudio   = items.filter(i => i.custodyLocation === 'at_studio').length
-  const returned   = items.filter(i => i.custodyLocation === 'at_client' && i.lastScannedAt !== null).length
+  const atClient   = items.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
   const inTransit  = items.filter(i => i.custodyLocation === 'in_transit').length
 
-  // Left to shoot = at studio and not yet shot
+  // Left to shoot = at studio and not yet shot (actionable now)
   const toShoot    = items.filter(i => i.custodyLocation === 'at_studio' && i.shotStatus === 'notShot').length
+
+  // Shot denominator excludes N/A items so 100% is reachable
+  const shotBase   = active - notRequired
 
   // Angle completion stats
   const itemsWithAngles = items.filter(i => i.requiredAngles.length > 0)
@@ -58,30 +64,30 @@ export default function ReportsView() {
         )}
       </div>
 
-      {/* KPI tiles — row 1: custody */}
+      {/* KPI tiles — row 1: custody overview */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
-        <KpiTile value={total}     label="Total Imported" color="#1C1C1E" />
-        <KpiTile value={scannedIn} label="Scanned In"     color="#2E7D32" />
-        <KpiTile value={atStudio}  label="At Studio"      color="#1565C0" />
-        <KpiTile value={returned}  label="Returned"       color="#888"    />
+        <KpiTile value={mapped}   label="Mapped"    color="#999"    />
+        <KpiTile value={active}   label="Active"    color="#2E7D32" />
+        <KpiTile value={atStudio} label="At Studio" color="#1565C0" />
+        <KpiTile value={atClient} label="At Client" color="#E65100" />
       </div>
 
       {/* KPI tiles — row 2: shot progress */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-        <KpiTile value={`${shot.length}/${scannedIn}`} label="Shot"         color="#7B1FA2" />
-        <KpiTile value={toShoot}                       label="Left to Shoot" color="#E65100" />
-        <KpiTile value={inTransit}                     label="In Transit"    color="#1565C0" />
-        <KpiTile value={notRequired}                   label="Shot N/A"      color="#999"    />
+        <KpiTile value={`${shot.length}/${shotBase}`} label="Shot"          color="#7B1FA2" />
+        <KpiTile value={toShoot}                      label="Left to Shoot" color="#E65100" />
+        <KpiTile value={inTransit}                    label="In Transit"    color="#1565C0" />
+        <KpiTile value={notRequired}                  label="N/A"           color="#999"    />
       </div>
 
       {/* Progress bars */}
       <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem' }}>
         <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '14px' }}>Progress</p>
 
-        <ProgressBar label="Scanned in (of total imported)" value={scannedIn}    total={total}     color="#2E7D32" />
-        <ProgressBar label="At Studio"                    value={atStudio}     total={scannedIn} color="#1565C0" />
-        <ProgressBar label="Shot (of scanned in)"         value={shot.length}  total={scannedIn} color="#7B1FA2" />
-        <ProgressBar label="Left to shoot"                value={toShoot}      total={scannedIn} color="#E65100" />
+        <ProgressBar label="Active (of total imported)" value={active}       total={total}    color="#2E7D32" />
+        <ProgressBar label="At Studio"                value={atStudio}     total={active}   color="#1565C0" />
+        <ProgressBar label="Shot (of active)"         value={shot.length}  total={shotBase} color="#7B1FA2" />
+        <ProgressBar label="Left to shoot"            value={toShoot}      total={active}   color="#E65100" />
 
         {itemsWithAngles.length > 0 && (
           <>

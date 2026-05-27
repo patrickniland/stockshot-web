@@ -34,7 +34,7 @@ const CUSTODY_ICON: Record<CustodyLocation, string> = {
 
 export default function StockListView() {
   const [search, setSearch] = useState('')
-  const [custodyFilter, setCustodyFilter] = useState<CustodyLocation | 'all' | 'mapped'>('all')
+  const [custodyFilter, setCustodyFilter] = useState<CustodyLocation | 'all' | 'active' | 'mapped'>('active')
   const [sortAsc, setSortAsc] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -72,8 +72,9 @@ export default function StockListView() {
     .filter(i => {
       const isActive = (i.custodyHistory ?? []).length > 0
       if (custodyFilter === 'mapped' && isActive) return false
-      if (custodyFilter !== 'all' && custodyFilter !== 'mapped' && i.custodyLocation !== custodyFilter) return false
-      if (custodyFilter !== 'all' && custodyFilter !== 'mapped' && !isActive) return false
+      if (custodyFilter === 'active' && !isActive) return false
+      if (custodyFilter !== 'all' && custodyFilter !== 'active' && custodyFilter !== 'mapped' && i.custodyLocation !== custodyFilter) return false
+      if (custodyFilter !== 'all' && custodyFilter !== 'active' && custodyFilter !== 'mapped' && !isActive) return false
       if (!search) return true
       const q = search.toLowerCase()
       return i.styleNumber.toLowerCase().includes(q) ||
@@ -156,13 +157,14 @@ export default function StockListView() {
         </div>
 
         {/* Custody filter */}
-        <select value={custodyFilter} onChange={e => setCustodyFilter(e.target.value as CustodyLocation | 'all' | 'mapped')}
+        <select value={custodyFilter} onChange={e => setCustodyFilter(e.target.value as CustodyLocation | 'all' | 'active' | 'mapped')}
           style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
-          <option value="all">All</option>
-          <option value="mapped">Mapped (not active)</option>
-          <option value="at_client">At Client</option>
-          <option value="in_transit">In Transit</option>
+          <option value="active">Active</option>
           <option value="at_studio">At Studio</option>
+          <option value="in_transit">In Transit</option>
+          <option value="at_client">At Client</option>
+          <option value="mapped">Mapped</option>
+          <option value="all">All</option>
         </select>
 
         <button onClick={() => setSortAsc(!sortAsc)} style={{ padding: '6px 10px', background: '#E0E0E0', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
@@ -332,7 +334,15 @@ export default function StockListView() {
 
               {/* Shot */}
               <div style={{ width: '90px' }}>
-                <select value={item.shotStatus} onChange={e => updateItemField(item.id, { shotStatus: e.target.value as ShotStatus })}
+                <select value={item.shotStatus} onChange={e => {
+                  const status = e.target.value as ShotStatus
+                  const now = new Date().toISOString()
+                  updateItemField(item.id, {
+                    shotStatus: status,
+                    shotAt: status === 'shot' ? now : null,
+                    completedAngles: status === 'shot' ? item.requiredAngles : [],
+                  })
+                }}
                   style={{
                     fontSize: '11px', fontWeight: 600, padding: '4px 6px', borderRadius: '99px',
                     border: '1px solid #E0E0E0', cursor: 'pointer', appearance: 'auto', width: '100%',

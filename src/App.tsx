@@ -7,6 +7,7 @@ import { getOrCreateOrg, signOut } from './lib/auth'
 import { useSupabaseSync, pushDirty } from './hooks/useSupabaseSync'
 import useAppStore from './store/useAppStore'
 import Layout from './components/Layout'
+import AdminGuard from './components/AdminGuard'
 import LoginView from './pages/LoginView'
 import ImportView from './pages/ImportView'
 import ScanInView from './pages/ScanInView'
@@ -16,14 +17,17 @@ import ShotListView from './pages/ShotListView'
 import PendingView from './pages/PendingView'
 import JobsView from './pages/JobsView'
 import ReportsView from './pages/ReportsView'
-import ClientsView from './pages/ClientsView'
-import ManagementView from './pages/ManagementView'
+import AdminClientsView from './pages/admin/ClientsView'
+import TrashView from './pages/admin/TrashView'
+import BulkStatusChangeView from './pages/admin/BulkStatusChangeView'
+import AdminSettingsView from './pages/admin/AdminSettingsView'
 import { Session } from '@supabase/supabase-js'
 
 function AppWithSync({ session }: { session: Session }) {
   const orgId = useAppStore(s => s.orgId)
   const setOrgId = useAppStore(s => s.setOrgId)
   const migrateLocations = useAppStore(s => s.migrateLocations)
+  const checkHasPin = useAppStore(s => s.checkHasPin)
   useSupabaseSync(orgId)
 
   useEffect(() => { migrateLocations() }, [])
@@ -44,6 +48,9 @@ function AppWithSync({ session }: { session: Session }) {
     }
     initOrg()
   }, [session.user.id])
+
+  // Pre-fetch PIN status so AdminGuard doesn't flash
+  useEffect(() => { checkHasPin() }, [])
 
   // Best-effort push of dirty items on tab close
   useEffect(() => {
@@ -70,8 +77,21 @@ function AppWithSync({ session }: { session: Session }) {
           <Route path="/scan-out" element={<ScanOutView />} />
           <Route path="/pending" element={<PendingView />} />
           <Route path="/dashboard" element={<ReportsView />} />
-          <Route path="/clients" element={<ClientsView />} />
-          <Route path="/management" element={<ManagementView />} />
+
+          {/* Admin area — all gated by AdminGuard */}
+          <Route path="/admin/*" element={
+            <AdminGuard>
+              <Routes>
+                <Route path="clients"  element={<AdminClientsView />} />
+                <Route path="bulk"     element={<BulkStatusChangeView />} />
+                <Route path="trash"    element={<TrashView />} />
+                <Route path="settings" element={<AdminSettingsView />} />
+                <Route path="*"        element={<Navigate to="/admin/clients" replace />} />
+              </Routes>
+            </AdminGuard>
+          } />
+
+          <Route path="*" element={<Navigate to="/import" replace />} />
         </Routes>
       </Layout>
     </BrowserRouter>
@@ -100,7 +120,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F5F5' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '32px', marginBottom: '12px' }}>📷</div>
-        <p style={{ fontSize: '14px', color: '#888' }}>Loading StockShot...</p>
+        <p style={{ fontSize: '14px', color: '#888' }}>Loading StockShot…</p>
       </div>
     </div>
   )

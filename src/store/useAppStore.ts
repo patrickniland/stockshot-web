@@ -8,6 +8,7 @@ import {
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
 import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta } from '../lib/db'
+import { supabase } from '../lib/supabase'
 
 interface AppStore {
   clients: Client[]
@@ -25,8 +26,13 @@ interface AppStore {
   scanOutLocation: CustodyLocation
   currentOperator: string
   shotListLocationFilter: CustodyLocation | 'all'
-  managerPin: string
   stylingMode: boolean
+
+  // Admin elevated session (in-memory only, never persisted)
+  adminSessionExpiresAt: number | null
+  adminSessionStartedAt: number | null
+  adminPinAttemptsThisSession: number
+  hasPinSet: boolean | null
 
   // Sync tracking
   dirtyItemIds: string[]
@@ -74,7 +80,7 @@ interface AppStore {
   bulkAssignProductType: (itemIds: string[], productType: string) => void
 
   setCustody: (itemId: string, location: CustodyLocation, operator: string, shootId?: string, notes?: string) => void
-  bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string) => void
+  bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string, notes?: string) => void
   moveItemsToShoot: (itemIds: string[], targetShootId: string) => void
   addItemToShoot: (item: StockItem, shootId: string) => void
   restoreItemState: (itemId: string, updates: Partial<StockItem>) => void
@@ -94,9 +100,17 @@ interface AppStore {
   setScanOutLocation: (val: CustodyLocation) => void
   setCurrentOperator: (val: string) => void
   setShotListLocationFilter: (val: CustodyLocation | 'all') => void
-  setManagerPin: (val: string) => void
   setStylingMode: (val: boolean) => void
   resetStore: () => void
+
+  // Admin PIN actions
+  verifyPin: (pin: string) => Promise<{ ok: boolean; lockedUntil?: Date }>
+  lockAdminNow: () => void
+  isAdminElevated: () => boolean
+  setupInitialPin: (pin: string) => Promise<void>
+  resetPinViaPassword: (currentPassword: string, newPin: string) => Promise<void>
+  checkHasPin: () => Promise<void>
+  grantAdminSession: () => void
 
   // Sync actions
   markDirty: (itemId: string) => void
@@ -155,8 +169,11 @@ const useAppStore = create<AppStore>()(
       scanOutLocation: 'in_transit',
       currentOperator: '',
       shotListLocationFilter: 'all',
-      managerPin: '',
       stylingMode: false,
+      adminSessionExpiresAt: null,
+      adminSessionStartedAt: null,
+      adminPinAttemptsThisSession: 0,
+      hasPinSet: null,
       dirtyItemIds: [],
       syncStatus: 'idle',
       lastSyncedAt: null,
@@ -190,9 +207,9 @@ const useAppStore = create<AppStore>()(
         return null
       },
 
-      getPending: () => get().getItems().filter(i => i.custodyLocation === 'at_client'),
+      getPending: () => get().getItems().filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length === 0),
       getReceived: () => get().getItems().filter(i => i.custodyLocation === 'at_studio'),
-      getDispatched: () => get().getItems().filter(i => i.custodyLocation === 'at_client'),
+      getDispatched: () => get().getItems().filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0),
       pendingIsMeaningful: () =>
         get().getActiveShoot()?.drops.some(d => d.importMode === 'jobList') ?? false,
 
@@ -507,8 +524,8 @@ const useAppStore = create<AppStore>()(
         }).catch(e => console.error('[Sync] setCustody error:', e))
       },
 
-      bulkSetCustody: (itemIds, location, operator) => {
-        itemIds.forEach(id => get().setCustody(id, location, operator))
+      bulkSetCustody: (itemIds, location, operator, notes?) => {
+        itemIds.forEach(id => get().setCustody(id, location, operator, undefined, notes))
       },
 
       moveItemsToShoot: (itemIds, targetShootId) => {
@@ -655,12 +672,75 @@ const useAppStore = create<AppStore>()(
         clients: [], savedShoots: [], activeShootId: null, orgId: null,
         deletedShootIds: [], deletedClientIds: [], lastScanFeedback: null,
         dirtyItemIds: [], syncStatus: 'idle', lastSyncedAt: null, lastPulledAt: null,
+        adminSessionExpiresAt: null, adminSessionStartedAt: null,
+        adminPinAttemptsThisSession: 0, hasPinSet: null,
       }),
       setMarkShotOnScanIn: (val) => set({ markShotOnScanIn: val }),
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
       setLastScanFeedback: (val) => set({ lastScanFeedback: val }),
-      setManagerPin: (val) => set({ managerPin: val }),
       setStylingMode: (val) => set({ stylingMode: val }),
+
+      // ── Admin PIN actions ─────────────────────────────────
+      grantAdminSession: () => set({
+        adminSessionExpiresAt: Date.now() + 30 * 60 * 1000,
+        adminSessionStartedAt: Date.now(),
+        adminPinAttemptsThisSession: 0,
+        hasPinSet: true,
+      }),
+
+      isAdminElevated: () => {
+        const exp = get().adminSessionExpiresAt
+        return exp !== null && exp > Date.now()
+      },
+
+      lockAdminNow: () => set({ adminSessionExpiresAt: null }),
+
+      verifyPin: async (pin) => {
+        try {
+          const { data, error } = await supabase.rpc('verify_admin_pin', { pin })
+          if (error) {
+            // Server threw — check if it's a lockout message
+            const msg = error.message ?? ''
+            const match = msg.match(/PIN locked until (.+)/)
+            if (match) {
+              return { ok: false, lockedUntil: new Date(match[1]) }
+            }
+            return { ok: false }
+          }
+          if (data === true) {
+            get().grantAdminSession()
+            return { ok: true }
+          }
+          set(s => ({ adminPinAttemptsThisSession: s.adminPinAttemptsThisSession + 1 }))
+          return { ok: false }
+        } catch {
+          return { ok: false }
+        }
+      },
+
+      setupInitialPin: async (pin) => {
+        const { error } = await supabase.rpc('set_admin_pin', { new_pin: pin })
+        if (error) throw new Error(error.message)
+        get().grantAdminSession()
+      },
+
+      resetPinViaPassword: async (currentPassword, newPin) => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user?.email) throw new Error('No email on account — cannot reset via password')
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+        })
+        if (authError) throw new Error('Incorrect password')
+        const { error } = await supabase.rpc('reset_admin_pin', { new_pin: newPin })
+        if (error) throw new Error(error.message)
+        get().grantAdminSession()
+      },
+
+      checkHasPin: async () => {
+        const { data, error } = await supabase.rpc('check_has_admin_pin')
+        if (!error) set({ hasPinSet: data === true })
+      },
       setScanInLocation: (val) => set({ scanInLocation: val }),
       setScanOutLocation: (val) => set({ scanOutLocation: val }),
       setCurrentOperator: (val) => set({ currentOperator: val }),
@@ -721,7 +801,6 @@ const useAppStore = create<AppStore>()(
         scanInLocation: s.scanInLocation,
         scanOutLocation: s.scanOutLocation,
         currentOperator: s.currentOperator,
-        managerPin: s.managerPin,
         stylingMode: s.stylingMode,
         lastPulledAt: s.lastPulledAt,
         lastSyncedAt: s.lastSyncedAt,

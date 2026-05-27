@@ -1,7 +1,7 @@
 // StockShot — Layout with Sidebar Navigation
 
 import { useState, useEffect } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { Session } from '@supabase/supabase-js'
 
@@ -14,8 +14,7 @@ const NAV = [
   { to: '/scan-out',  icon: '📦', label: 'Scan Out' },
   { to: '/pending',   icon: '⚠', label: 'Missing' },
   { to: '/dashboard', icon: '📊', label: 'Dashboard' },
-  { to: '/clients',    icon: '🏢', label: 'Clients' },
-  { to: '/management', icon: '⚙', label: 'Management' },
+  { to: '/admin',     icon: '⚙', label: 'Admin' },
 ]
 
 function formatAgo(ts: string | null): string {
@@ -61,11 +60,31 @@ function SyncIndicator() {
   )
 }
 
+function useAdminSessionWatchdog() {
+  const adminSessionExpiresAt = useAppStore(s => s.adminSessionExpiresAt)
+  const lockAdminNow = useAppStore(s => s.lockAdminNow)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (adminSessionExpiresAt && adminSessionExpiresAt <= Date.now()) {
+        lockAdminNow()
+        if (location.pathname.startsWith('/admin')) {
+          navigate('/admin', { replace: true })
+        }
+      }
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [adminSessionExpiresAt, lockAdminNow, navigate, location.pathname])
+}
+
 export default function Layout({ children, session, onSignOut }: {
   children: React.ReactNode
   session?: Session | null
   onSignOut?: () => void
 }) {
+  useAdminSessionWatchdog()
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getStudioQueue = useAppStore(s => s.getStudioQueue)
   const getPending = useAppStore(s => s.getPending)
@@ -119,6 +138,7 @@ export default function Layout({ children, session, onSignOut }: {
               <NavLink
                 key={to}
                 to={to}
+                end={to !== '/admin'}
                 style={({ isActive }) => ({
                   display: 'flex',
                   alignItems: 'center',
