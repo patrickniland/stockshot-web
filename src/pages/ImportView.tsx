@@ -96,22 +96,13 @@ export default function ImportView() {
         drops: [drop],
         lookOrder: [],
         deletedAt: null,
+        isUnassigned: false,
       }
       addShoot(newShoot)
-      // Save shoot meta and items to Supabase
       if (orgId) {
         upsertShootMeta(newShoot, orgId)
-          .then(() => {
-            console.log('[Import] Shoot meta saved, now saving', result.items.length, 'items...')
-            return upsertItems(result.items, newShootId, orgId)
-          })
-          .then(() => console.log('[Import] Items saved to Supabase ✓'))
-          .catch(e => {
-            console.error('[Import] shoot/items save error:', e)
-            console.error('[Import] Error details:', JSON.stringify(e))
-          })
-      } else {
-        console.error('[Import] No orgId available - cannot save to Supabase')
+          .then(() => upsertItems(result.items, newShootId, orgId))
+          .catch(e => console.error('[Import] save error:', e))
       }
     }
 
