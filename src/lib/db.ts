@@ -81,17 +81,20 @@ export async function upsertShootMeta(shoot: Omit<Shoot, 'items'>, orgId: string
   const { error } = await supabase.from('shoots').upsert({
     id: shoot.id,
     name: shoot.name,
-    client_id: shoot.clientId,
+    client_id: shoot.clientId ?? null,
     created_at: shoot.createdAt,
     updated_at: new Date().toISOString(),
     drops: shoot.drops,
     look_order: shoot.lookOrder,
     deleted_at: shoot.deletedAt ?? null,
-    is_unassigned: shoot.isUnassigned,
+    is_unassigned: shoot.isUnassigned ?? false,
     org_id: orgId,
   }, { onConflict: 'id' })
 
-  if (error) throw error
+  if (error) {
+    console.error('[DB] upsertShootMeta error — code:', error.code, '| message:', error.message, '| details:', error.details, '| hint:', error.hint)
+    throw error
+  }
 }
 
 export async function deleteShoot(shootId: string): Promise<void> {
@@ -112,7 +115,10 @@ export async function upsertItems(items: StockItem[], shootId: string, orgId: st
   const rows = items.map(i => mapItemToDB(i, shootId, orgId))
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await supabase.from('stock_items').upsert(rows.slice(i, i + 500), { onConflict: 'id' })
-    if (error) throw error
+    if (error) {
+      console.error('[DB] upsertItems error — code:', error.code, '| message:', error.message, '| details:', error.details, '| hint:', error.hint)
+      throw error
+    }
   }
 }
 
