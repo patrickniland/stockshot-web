@@ -72,13 +72,14 @@ export default function JobsView() {
 
           {shoots.map(shoot => {
             const isActive = shoot.id === activeShootId
-            const canSwitch = !isActive
             const showDrops = expandedDrops === shoot.id
-            const itemCount = shoot.items.length
-            const scannedIn = shoot.items.filter(i => i.lastScannedAt !== null).length
-            const atStudio = shoot.items.filter(i => i.custodyLocation === 'at_studio').length
-            const returned = shoot.items.filter(i => i.custodyLocation === 'at_client' && i.lastScannedAt !== null).length
-            const shotCount = shoot.items.filter(i => i.shotStatus === 'shot').length
+            const mapped     = shoot.items.filter(i => (i.custodyHistory ?? []).length === 0).length
+            const active     = shoot.items.filter(i => (i.custodyHistory ?? []).length > 0).length
+            const atStudio   = shoot.items.filter(i => i.custodyLocation === 'at_studio').length
+            const atClient   = shoot.items.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
+            const notRequired = shoot.items.filter(i => i.shotStatus === 'notRequired').length
+            const shotCount  = shoot.items.filter(i => i.shotStatus === 'shot').length
+            const shotBase   = active - notRequired
 
             return (
               <div key={shoot.id}
@@ -131,11 +132,11 @@ export default function JobsView() {
 
                     {/* Stats */}
                     <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: shoot.drops.length > 0 ? '8px' : 0 }}>
-                      <StatChip value={itemCount} label="Imported" color="#1C1C1E" />
-                      <StatChip value={scannedIn} label="Scanned In" color="#2E7D32" />
+                      <StatChip value={mapped}   label="Mapped"    color="#999"    />
+                      <StatChip value={active}   label="Active"    color="#2E7D32" />
                       <StatChip value={atStudio} label="At Studio" color="#1565C0" />
-                      <StatChip value={returned} label="Returned" color="#888" />
-                      <StatChip value={`${shotCount}/${scannedIn}`} label="Shot" color="#7B1FA2" />
+                      <StatChip value={atClient} label="At Client" color="#E65100" />
+                      <StatChip value={`${shotCount}/${shotBase}`} label="Shot" color="#7B1FA2" />
                       <StatChip value={shoot.drops.length} label={`Drop${shoot.drops.length !== 1 ? 's' : ''}`} color="#666" />
                     </div>
 
@@ -203,19 +204,6 @@ export default function JobsView() {
     </div>
   )
 }
-
-// Extend Shoot type locally for hasMeaningfulPending
-declare module '../types' {
-  interface Shoot {
-    hasMeaningfulPending: boolean
-  }
-}
-
-// Patch computed property
-Object.defineProperty(Object.prototype, 'hasMeaningfulPending', {
-  get() { return this.drops?.some?.((d: any) => d.importMode === 'jobList') ?? false },
-  configurable: true,
-})
 
 function StatChip({ value, label, color }: { value: string | number; label: string; color: string }) {
   return (
