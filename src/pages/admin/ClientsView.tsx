@@ -5,13 +5,12 @@ import { useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import useAppStore from '../../store/useAppStore'
 import { useNavSync } from '../../hooks/useNavSync'
-import { Client, ProductType, ShotAngle, Shoot } from '../../types'
+import { Client, ProductType, ShotAngle } from '../../types'
 
 export default function ClientsView() {
   useNavSync({ onEnter: 'pull', onLeave: 'push' })
   const [editing, setEditing] = useState<Client | null>(null)
   const { clients, addClient, updateClient, deleteClient } = useAppStore()
-  const addShootToList = useAppStore(s => s.addShootToList)
 
   function newClient() {
     setEditing({
@@ -27,20 +26,6 @@ export default function ClientsView() {
     const isNew = !clients.some(c => c.id === editing.id)
     if (isNew) {
       addClient(editing)
-      // Create Unassigned shoot in local state immediately
-      const unassigned: Shoot = {
-        id: uuidv4(),
-        name: `${editing.name} — Unassigned`,
-        clientId: editing.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        items: [],
-        drops: [],
-        lookOrder: [],
-        deletedAt: null,
-        isUnassigned: true,
-      }
-      addShootToList(unassigned)
     } else {
       updateClient(editing)
     }

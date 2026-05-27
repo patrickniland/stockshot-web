@@ -21,7 +21,9 @@ export default function JobsView() {
   const renameActiveShoot = useAppStore(s => s.renameActiveShoot)
   const clientName = useAppStore(s => s.clientName)
   
-  const activeShoots = getActiveShoots()
+  // Hide empty Unassigned shoots — they're system-managed holding areas, not real jobs.
+  // Unassigned shoots with items remain visible so nothing is lost.
+  const activeShoots = getActiveShoots().filter(s => !s.isUnassigned || s.items.length > 0)
 
   // Group by client
   const grouped: Record<string, Shoot[]> = {}
