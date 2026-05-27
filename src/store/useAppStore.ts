@@ -524,12 +524,25 @@ const useAppStore = create<AppStore>()(
           ),
         })
 
-        updateItemCustody(itemId, {
-          custodyLocation: location,
-          custodyHistory: updatedItem.custodyHistory,
-          lastScannedAt: now,
-          lastScannedBy: operator,
-        }).catch(e => console.error('[Sync] setCustody error:', e))
+        // Use upsertItem so the row is created in DB if it doesn't exist yet
+        // (can happen when the shoot's initial import save failed).
+        // First ensure the shoot itself exists, then upsert the item.
+        const { orgId } = get()
+        if (orgId) {
+          const parentShoot = get().savedShoots.find(s => s.id === foundShootId)
+          const doSync = async () => {
+            if (parentShoot) {
+              // Ensure client exists in DB if shoot has one
+              if (parentShoot.clientId) {
+                const client = get().clients.find(c => c.id === parentShoot.clientId)
+                if (client) await upsertClient(client, orgId)
+              }
+              await upsertShootMeta(parentShoot, orgId)
+            }
+            await upsertItem(updatedItem, foundShootId!, orgId)
+          }
+          doSync().catch(e => console.error('[Sync] setCustody error — code:', e?.code, '| message:', e?.message))
+        }
       },
 
       bulkSetCustody: (itemIds, location, operator, notes?) => {
