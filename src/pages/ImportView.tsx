@@ -70,6 +70,7 @@ export default function ImportView() {
     }
 
     const orgId = useAppStore.getState().orgId
+    console.log('[Import] handleImport — orgId:', orgId, '| target:', importTarget, '| items:', result.items.length)
 
     if (importTarget === 'existing') {
       const activeShoot = getActiveShoot()
@@ -102,7 +103,9 @@ export default function ImportView() {
       if (orgId) {
         upsertShootMeta(newShoot, orgId)
           .then(() => upsertItems(result.items, newShootId, orgId))
-          .catch(e => console.error('[Import] save error:', e))
+          .catch(e => console.error('[Import] save error — code:', e?.code, '| message:', e?.message, '| details:', e?.details))
+      } else {
+        console.warn('[Import] skipping Supabase save — orgId is null')
       }
     }
 
