@@ -7,7 +7,7 @@ import {
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient } from '../lib/db'
 import { supabase } from '../lib/supabase'
 
 interface AppStore {
@@ -214,26 +214,34 @@ const useAppStore = create<AppStore>()(
         get().getActiveShoot()?.drops.some(d => d.importMode === 'jobList') ?? false,
 
       // ── Clients ───────────────────────────────────────────
-      addClient: (client) => set(s => ({ clients: [...s.clients, client] })),
-      updateClient: (client) => set(s => {
-        const clients = s.clients.map(c => c.id === client.id ? client : c)
-        const savedShoots = s.savedShoots.map(shoot => {
-          if (shoot.clientId !== client.id) return shoot
-          const items = shoot.items.map(item => {
-            if (!item.productType) return item
-            const pt = client.productTypes.find(p =>
-              p.name.toLowerCase() === item.productType!.toLowerCase() ||
-              p.aliases?.some(a => a.toLowerCase() === item.productType!.toLowerCase())
-            )
-            if (!pt) return item
-            const newAngles = pt.requiredAngles.map(a => a.name)
-            if (JSON.stringify(newAngles) === JSON.stringify(item.requiredAngles)) return item
-            return { ...item, requiredAngles: newAngles }
+      addClient: (client) => {
+        set(s => ({ clients: [...s.clients, client] }))
+        const { orgId } = get()
+        if (orgId) upsertClient(client, orgId).catch(e => console.error('[Sync] addClient error — code:', e?.code, '| message:', e?.message))
+      },
+      updateClient: (client) => {
+        set(s => {
+          const clients = s.clients.map(c => c.id === client.id ? client : c)
+          const savedShoots = s.savedShoots.map(shoot => {
+            if (shoot.clientId !== client.id) return shoot
+            const items = shoot.items.map(item => {
+              if (!item.productType) return item
+              const pt = client.productTypes.find(p =>
+                p.name.toLowerCase() === item.productType!.toLowerCase() ||
+                p.aliases?.some(a => a.toLowerCase() === item.productType!.toLowerCase())
+              )
+              if (!pt) return item
+              const newAngles = pt.requiredAngles.map(a => a.name)
+              if (JSON.stringify(newAngles) === JSON.stringify(item.requiredAngles)) return item
+              return { ...item, requiredAngles: newAngles }
+            })
+            return { ...shoot, items, updatedAt: new Date().toISOString() }
           })
-          return { ...shoot, items, updatedAt: new Date().toISOString() }
+          return { clients, savedShoots }
         })
-        return { clients, savedShoots }
-      }),
+        const { orgId } = get()
+        if (orgId) upsertClient(client, orgId).catch(e => console.error('[Sync] updateClient error — code:', e?.code, '| message:', e?.message))
+      },
       deleteClient: (clientId) => set(s => {
         const unassignedIds = s.savedShoots
           .filter(sh => sh.clientId === clientId && sh.isUnassigned)
