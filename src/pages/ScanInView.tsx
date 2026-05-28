@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   CaretLeft, CaretRight, Camera, X, ArrowCounterClockwise, Gear, Package,
+  CircleNotch, ScanSmiley, SpeakerHigh, SpeakerSimpleSlash,
 } from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
+import { useToast } from '../hooks/useToast'
 import { StockItem, CustodyLocation, CustodyEvent } from '../types'
 import CameraScanner from '../components/CameraScanner'
 import ShootPicker from '../components/ShootPicker'
@@ -67,10 +69,28 @@ const LOCATION_STYLE: Record<CustodyLocation, { text: string; bg: string; active
   in_transit: { text: 'text-[var(--color-info)]',    bg: 'bg-[var(--color-info)]',    activeBg: 'bg-[var(--color-info)]/10' },
 }
 
+function playTick() {
+  try {
+    const actx = new AudioContext()
+    const osc = actx.createOscillator()
+    const gain = actx.createGain()
+    osc.connect(gain)
+    gain.connect(actx.destination)
+    osc.type = 'sine'
+    osc.frequency.value = 1200
+    gain.gain.setValueAtTime(0.15, actx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.08)
+    osc.start(actx.currentTime)
+    osc.stop(actx.currentTime + 0.08)
+    setTimeout(() => actx.close(), 500)
+  } catch {}
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ScanInView() {
   useNavSync({ onEnter: 'pull' })
+  const { addToast } = useToast()
 
   const scanInputRef = useRef<HTMLInputElement>(null)
   const [scanInput, setScanInput] = useState('')
@@ -81,6 +101,11 @@ export default function ScanInView() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [showAllScans, setShowAllScans] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [flashState, setFlashState] = useState<'success' | 'error' | null>(null)
+  const [soundEnabled, setSoundEnabled] = useState(
+    () => localStorage.getItem('stockshot_scan_sound') === 'true'
+  )
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
@@ -139,6 +164,28 @@ export default function ScanInView() {
     i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0
   )
 
+  // ── Feedback helpers ─────────────────────────────────────────────────────────
+
+  function triggerSuccess() {
+    setFlashState('success')
+    setTimeout(() => setFlashState(null), 350)
+    try { navigator.vibrate(50) } catch {}
+    if (soundEnabled) playTick()
+  }
+
+  function triggerError(message: string) {
+    setFlashState('error')
+    setTimeout(() => setFlashState(null), 350)
+    try { navigator.vibrate([100, 50, 100]) } catch {}
+    addToast('error', message)
+  }
+
+  function toggleSound() {
+    const next = !soundEnabled
+    setSoundEnabled(next)
+    localStorage.setItem('stockshot_scan_sound', String(next))
+  }
+
   // ── Scan logic ──────────────────────────────────────────────────────────────
 
   function handleScan(barcode: string) {
@@ -156,6 +203,9 @@ export default function ScanInView() {
       if (selectedShoot?.isUnassigned) {
         doAddNewItem(raw)
       } else {
+        setFlashState('error')
+        setTimeout(() => setFlashState(null), 350)
+        try { navigator.vibrate([100, 50, 100]) } catch {}
         setPendingAction({ type: 'confirmAdd', barcode: raw })
       }
       return
@@ -163,6 +213,9 @@ export default function ScanInView() {
 
     if (foundShootId !== selectedShootId) {
       const fromShoot = savedShoots.find(s => s.id === foundShootId)
+      setFlashState('error')
+      setTimeout(() => setFlashState(null), 350)
+      try { navigator.vibrate([100, 50, 100]) } catch {}
       setPendingAction({
         type: 'wrongShoot',
         item: foundItem,
@@ -174,6 +227,7 @@ export default function ScanInView() {
 
     const hasHistory = (foundItem.custodyHistory ?? []).length > 0
     if (foundItem.custodyLocation === scanInLocation && hasHistory) {
+      triggerError(`Already ${locationLabel(scanInLocation)} — ${foundItem.styleNumber || foundItem.qrCodeValue}`)
       appendFeedback('already', foundItem)
       return
     }
@@ -221,6 +275,8 @@ export default function ScanInView() {
       message: stylingMode ? 'Confirmed for Styling' : locationLabel(scanInLocation),
       scannedValue: item.styleNumber || item.qrCodeValue,
     })
+
+    triggerSuccess()
   }
 
   function appendFeedback(type: 'already', item: StockItem) {
@@ -281,6 +337,7 @@ export default function ScanInView() {
       message: 'Added as new item',
       scannedValue: barcode,
     })
+    triggerSuccess()
   }
 
   function handleUndo(scan: RecentScan) {
@@ -297,15 +354,23 @@ export default function ScanInView() {
   function triggerScan() {
     const v = scanInput.trim()
     if (!v) return
+    setScanning(true)
     handleScan(v)
     setScanInput('')
-    setTimeout(() => scanInputRef.current?.focus(), 50)
+    setTimeout(() => {
+      setScanning(false)
+      scanInputRef.current?.focus()
+    }, 300)
   }
 
   function handleCameraScan(value: string) {
+    setScanning(true)
     handleScan(value)
     setShowCamera(false)
-    setTimeout(() => scanInputRef.current?.focus(), 50)
+    setTimeout(() => {
+      setScanning(false)
+      scanInputRef.current?.focus()
+    }, 300)
   }
 
   // ── Shared fragments ────────────────────────────────────────────────────────
@@ -318,7 +383,6 @@ export default function ScanInView() {
 
   const settingsFields = (
     <div className="flex flex-col gap-3">
-      {/* Operator */}
       <ControlRow label="Operator">
         <Input
           value={currentOperator}
@@ -328,12 +392,10 @@ export default function ScanInView() {
         />
       </ControlRow>
 
-      {/* Shoot */}
       <ControlRow label="Shoot">
         <ShootPicker shoots={activeShoots} value={selectedShootId} onChange={selectShoot} />
       </ControlRow>
 
-      {/* Location */}
       <ControlRow label="Location">
         <div className="flex gap-1.5">
           {(['at_studio', 'at_client'] as CustodyLocation[]).map(loc => (
@@ -353,7 +415,6 @@ export default function ScanInView() {
         </div>
       </ControlRow>
 
-      {/* Look */}
       <ControlRow label="Look">
         <div className="flex items-center gap-1.5">
           <Button
@@ -380,43 +441,63 @@ export default function ScanInView() {
           </Button>
         </div>
       </ControlRow>
+
+      {/* Sound toggle */}
+      <div className="flex items-center justify-between pt-2 border-t border-[var(--color-border)]">
+        <span className="text-[var(--text-xs)] text-slate-500">Scan sound</span>
+        <button
+          onClick={toggleSound}
+          className="flex items-center gap-1.5 text-[var(--text-xs)] touch-target px-2 rounded-[var(--radius-sm)] hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+        >
+          {soundEnabled ? <SpeakerHigh size={14} /> : <SpeakerSimpleSlash size={14} />}
+          {soundEnabled ? 'On' : 'Off'}
+        </button>
+      </div>
     </div>
   )
 
   const scanField = (
     <div className="flex flex-col gap-3">
-      {/* Operator required hint */}
       {!currentOperator.trim() && (
         <p className="text-[var(--text-xs)] text-[var(--color-warning)] text-center font-medium">
           Enter operator name to begin scanning
         </p>
       )}
 
-      <Input
-        ref={scanInputRef}
-        scannerMode
-        value={scanInput}
-        onChange={e => setScanInput(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && triggerScan()}
-        placeholder={canScan ? 'Scan or type barcode...' : 'Enter operator name first'}
-        disabled={!canScan}
-        className="text-center font-mono text-[var(--text-xl)] py-3"
-      />
+      {/* Flash wrapper — shadow pulses green/red on scan result */}
+      <div className={[
+        'rounded-[var(--radius-md)] transition-shadow duration-150',
+        flashState === 'success' ? 'shadow-[0_0_0_3px_var(--color-success)]' :
+        flashState === 'error'   ? 'shadow-[0_0_0_3px_var(--color-danger)]'  : '',
+      ].join(' ')}>
+        <Input
+          ref={scanInputRef}
+          scannerMode
+          value={scanInput}
+          onChange={e => setScanInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && triggerScan()}
+          placeholder={canScan ? 'Scan or type barcode...' : 'Enter operator name first'}
+          disabled={!canScan}
+          className="text-center font-mono text-[var(--text-xl)] py-3"
+        />
+      </div>
 
       <div className="flex gap-2">
         <Button
           variant="primary" size="lg"
           className="flex-1"
           onClick={triggerScan}
-          disabled={!canScan || !scanInput.trim()}
+          disabled={!canScan || !scanInput.trim() || scanning}
         >
-          ✓ Scan In
+          {scanning
+            ? <CircleNotch size={18} className="animate-spin" />
+            : '✓ Scan In'}
         </Button>
         <Button
           variant="primary" size="lg"
           Icon={Camera}
           onClick={() => setShowCamera(true)}
-          disabled={!canScan}
+          disabled={!canScan || scanning}
         >
           Camera
         </Button>
@@ -501,7 +582,14 @@ export default function ScanInView() {
           Recent scans this session
         </div>
         {recentScans.length === 0 ? (
-          <p className="px-2 py-3 text-[var(--text-xs)] text-slate-400">No scans yet.</p>
+          // Phone: icon + subtext. Tablet+: plain text
+          <>
+            <div className="md:hidden flex flex-col items-center py-8 gap-2 text-slate-300">
+              <ScanSmiley size={64} weight="duotone" />
+              <span className="text-[var(--text-sm)] text-slate-400">Scan to begin</span>
+            </div>
+            <p className="hidden md:block px-2 py-3 text-[var(--text-xs)] text-slate-400">No scans yet.</p>
+          </>
         ) : (
           <>
             {displayed.map((scan, i) => {
@@ -550,7 +638,6 @@ export default function ScanInView() {
 
   const itemTable = (items: StockItem[], emptyMsg = 'No items at this location') => (
     <div>
-      {/* Column headers */}
       <div className="flex px-4 py-1.5 bg-slate-50 border-b border-[var(--color-border)] text-[var(--text-xs)] font-semibold text-slate-400 uppercase tracking-wide">
         <span className="w-7">#</span>
         <span className="w-32">Style</span>
@@ -627,7 +714,6 @@ export default function ScanInView() {
           <p className="text-[var(--text-lg)] font-semibold text-slate-900 text-center mb-4">Scan In</p>
           {settingsFields}
 
-          {/* Styling Mode */}
           <div className="flex items-center gap-2 mt-3 mb-4">
             <Button
               variant="secondary" size="sm"
@@ -685,13 +771,9 @@ export default function ScanInView() {
           {scanField}
         </Card>
 
-        {/* Feedback banner */}
         {feedbackBanner}
-
-        {/* Pending actions */}
         {pendingActions}
 
-        {/* Recent scans */}
         <div className="md:hidden">
           {recentScansList(showAllScans ? undefined : 3)}
         </div>
@@ -702,7 +784,6 @@ export default function ScanInView() {
 
       {/* ── Desktop: right reference panel ── */}
       <div className="hidden lg:flex flex-col flex-1 border-l border-[var(--color-border)] bg-white min-w-0">
-        {/* Panel header */}
         <div className="px-4 py-3 bg-slate-50 border-b border-[var(--color-border)] flex items-center gap-2 flex-shrink-0">
           <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
             {locationLabel(activeStatView)}

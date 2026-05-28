@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { Camera, X, ArrowCounterClockwise, Gear, Package } from '@phosphor-icons/react'
+import { Camera, X, ArrowCounterClockwise, Gear, Package, CircleNotch, ScanSmiley } from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
+import { useToast } from '../hooks/useToast'
 import { StockItem, CustodyLocation } from '../types'
 import CameraScanner from '../components/CameraScanner'
 import ShootPicker from '../components/ShootPicker'
@@ -79,6 +80,10 @@ export default function ScanOutView() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [showAllScans, setShowAllScans] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [flashState, setFlashState] = useState<'success' | 'error' | null>(null)
+
+  const { addToast } = useToast()
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
@@ -119,6 +124,21 @@ export default function ScanOutView() {
     i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0
   )
 
+  // ── Feedback helpers ─────────────────────────────────────────────────────────
+
+  function triggerSuccess() {
+    setFlashState('success')
+    setTimeout(() => setFlashState(null), 350)
+    try { navigator.vibrate(50) } catch {}
+  }
+
+  function triggerError(message: string) {
+    setFlashState('error')
+    setTimeout(() => setFlashState(null), 350)
+    try { navigator.vibrate([100, 50, 100]) } catch {}
+    addToast('error', message)
+  }
+
   // ── Scan logic ──────────────────────────────────────────────────────────────
 
   function handleScan(barcode: string) {
@@ -133,6 +153,7 @@ export default function ScanOutView() {
     }
 
     if (!foundItem) {
+      triggerError(`Item not found — ${raw}`)
       setLastScanFeedback({ id: Date.now().toString(), type: 'notFound', message: 'Item not found', scannedValue: raw })
       return
     }
@@ -140,6 +161,7 @@ export default function ScanOutView() {
     const { location: targetLocation } = selectedOption
     const hasHistory = (foundItem.custodyHistory ?? []).length > 0
     if (foundItem.custodyLocation === targetLocation && hasHistory) {
+      triggerError(`Already ${locationLabel(targetLocation)} — ${foundItem.styleNumber || foundItem.qrCodeValue}`)
       setLastScanFeedback({
         id: Date.now().toString(),
         type: 'alreadyAtLocation',
@@ -179,6 +201,7 @@ export default function ScanOutView() {
       message: selectedOption.label,
       scannedValue: foundItem.styleNumber || foundItem.qrCodeValue,
     })
+    triggerSuccess()
   }
 
   function handleUndo(scan: RecentScan) {
@@ -190,15 +213,23 @@ export default function ScanOutView() {
   function triggerScan() {
     const v = scanInput.trim()
     if (!v) return
+    setScanning(true)
     handleScan(v)
     setScanInput('')
-    setTimeout(() => scanInputRef.current?.focus(), 50)
+    setTimeout(() => {
+      setScanning(false)
+      scanInputRef.current?.focus()
+    }, 300)
   }
 
   function handleCameraScan(value: string) {
+    setScanning(true)
     handleScan(value)
     setShowCamera(false)
-    setTimeout(() => scanInputRef.current?.focus(), 50)
+    setTimeout(() => {
+      setScanning(false)
+      scanInputRef.current?.focus()
+    }, 300)
   }
 
   // ── Shared fragments ────────────────────────────────────────────────────────
@@ -261,31 +292,37 @@ export default function ScanOutView() {
         </p>
       )}
 
-      <Input
-        ref={scanInputRef}
-        scannerMode
-        value={scanInput}
-        onChange={e => setScanInput(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && triggerScan()}
-        placeholder={canScan ? 'Scan or type barcode...' : 'Enter operator name first'}
-        disabled={!canScan}
-        className="text-center font-mono text-[var(--text-xl)] py-3"
-      />
+      <div className={[
+        'rounded-[var(--radius-md)] transition-shadow duration-150',
+        flashState === 'success' ? 'shadow-[0_0_0_3px_var(--color-success)]' :
+        flashState === 'error'   ? 'shadow-[0_0_0_3px_var(--color-danger)]'  : '',
+      ].join(' ')}>
+        <Input
+          ref={scanInputRef}
+          scannerMode
+          value={scanInput}
+          onChange={e => setScanInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && triggerScan()}
+          placeholder={canScan ? 'Scan or type barcode...' : 'Enter operator name first'}
+          disabled={!canScan}
+          className="text-center font-mono text-[var(--text-xl)] py-3"
+        />
+      </div>
 
       <div className="flex gap-2">
         <Button
           variant="primary" size="lg"
           className="flex-1"
           onClick={triggerScan}
-          disabled={!canScan || !scanInput.trim()}
+          disabled={!canScan || !scanInput.trim() || scanning}
         >
-          Scan Out
+          {scanning ? <CircleNotch size={18} className="animate-spin" /> : 'Scan Out'}
         </Button>
         <Button
           variant="primary" size="lg"
           Icon={Camera}
           onClick={() => setShowCamera(true)}
-          disabled={!canScan}
+          disabled={!canScan || scanning}
         >
           Camera
         </Button>
@@ -318,7 +355,13 @@ export default function ScanOutView() {
           Recent scans this session
         </div>
         {recentScans.length === 0 ? (
-          <p className="px-2 py-3 text-[var(--text-xs)] text-slate-400">No scans yet.</p>
+          <>
+            <div className="md:hidden flex flex-col items-center py-8 gap-2 text-slate-300">
+              <ScanSmiley size={64} weight="duotone" />
+              <span className="text-[var(--text-sm)] text-slate-400">Scan to begin</span>
+            </div>
+            <p className="hidden md:block px-2 py-3 text-[var(--text-xs)] text-slate-400">No scans yet.</p>
+          </>
         ) : (
           <>
             {displayed.map((scan, i) => {
