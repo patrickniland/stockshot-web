@@ -138,6 +138,9 @@ export default function ScanInView() {
 
   function handleScan(barcode: string) {
     const raw = barcode.trim()
+    console.log('[Scan] handleScan — raw:', raw, '| canScan:', canScan, '| operator:', JSON.stringify(currentOperator), '| selectedShootId:', selectedShootId)
+    const selectedShootItems = savedShoots.find(s => s.id === selectedShootId)?.items ?? []
+    console.log('[Scan] selectedShoot items:', selectedShootItems.length, '| total shoots:', savedShoots.map(s => `${s.name}(${s.items.length})`).join(', '))
     if (!raw || !canScan) return
 
     // Search all shoots for a matching item
@@ -301,7 +304,6 @@ export default function ScanInView() {
     handleScan(v)
     setScanInput('')
     setTimeout(() => inputRef.current?.focus(), 50)
-    setPendingAction(null)
   }
 
   function handleCameraScan(value: string) {

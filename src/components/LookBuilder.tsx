@@ -2,6 +2,25 @@
 // Slide-out panel from Shot List for managing item look assignments
 
 import { useState } from 'react'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { StockItem } from '../types'
 import { useNavSync } from '../hooks/useNavSync'
 
@@ -10,19 +29,42 @@ interface Props {
   lookOrder: number[]
   onUpdateItem: (itemId: string, looks: number[]) => void
   onAddLook: () => void
+  onReorderLook: (lookA: number, lookB: number) => void
   onClose: () => void
 }
 
-export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook, onClose }: Props) {
+export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook, onReorderLook, onClose }: Props) {
   useNavSync({ onEnter: 'pull', onLeave: 'push' })
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLook, setBulkLook] = useState<string>('')
   const [filterLook, setFilterLook] = useState<string>('all')
   const [receivedOnly, setReceivedOnly] = useState(true)
-  const [extraFieldFilter, setExtraFieldFilter] = useState<string>('') // format: "key:value"
+  const [extraFieldFilter, setExtraFieldFilter] = useState<string>('')
+  const [showLookOrder, setShowLookOrder] = useState(false)
+  const [dragActiveLookId, setDragActiveLookId] = useState<number | null>(null)
 
-  // Build dynamic filter options from extraFields across all items
+  // ── dnd-kit sensors ────────────────────────────────────────────────────────
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  function handleDragStart(event: DragStartEvent) {
+    setDragActiveLookId(event.active.id as number)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setDragActiveLookId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    onReorderLook(active.id as number, over.id as number)
+  }
+
+  // ── Item filtering ─────────────────────────────────────────────────────────
+
   const extraFieldOptions = (() => {
     const map: Record<string, Set<string>> = {}
     items.forEach(item => {
@@ -38,7 +80,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
 
   const receivedItems = receivedOnly ? items.filter(i => i.custodyLocation === 'at_studio') : items
-  const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i => 
+  const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i =>
     filterLook === 'none' ? i.looks.length === 0 : i.looks.includes(parseInt(filterLook))
   )
   const extraFiltered = extraFieldFilter
@@ -55,6 +97,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
       i.description.toLowerCase().includes(q) ||
       i.sku.toLowerCase().includes(q)
   })
+
+  const allLooks = [...new Set([...lookOrder, ...items.flatMap(i => i.looks)])].sort((a, b) => a - b)
+
+  // ── Selection + bulk actions ───────────────────────────────────────────────
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -75,12 +121,11 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   }
 
   function removeLookFromItem(item: StockItem, look: number) {
-    if (item.looks.length <= 1) return // keep at least one look
+    if (item.looks.length <= 1) return
     onUpdateItem(item.id, item.looks.filter(l => l !== look))
   }
 
   function moveItemToLook(item: StockItem, look: number) {
-    // Replace ALL existing looks with just this one
     onUpdateItem(item.id, [look])
   }
 
@@ -93,7 +138,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
     } else {
       look = parseInt(bulkLook)
     }
-    // Batch ALL updates at once to avoid stale closure issues
     const updatedItems = items.map(item => {
       if (!selectedIds.has(item.id)) return item
       if (bulkAction === 'add') {
@@ -102,11 +146,9 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           : [...item.looks, look].sort((a, b) => a - b)
         return { ...item, looks: newLooks }
       } else {
-        // Move — replace ALL looks with just this one
         return { ...item, looks: [look] }
       }
     })
-    // Call onUpdateItem for each changed item
     updatedItems.forEach(item => {
       const original = items.find(i => i.id === item.id)
       if (original && JSON.stringify(original.looks) !== JSON.stringify(item.looks)) {
@@ -116,12 +158,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
     setSelectedIds(new Set())
     setBulkLook('')
   }
-
-  function handleAddNewLook() {
-    onAddLook()
-  }
-
-  const allLooks = [...new Set([...lookOrder, ...items.flatMap(i => i.looks)])].sort((a, b) => a - b)
 
   return (
     <>
@@ -155,7 +191,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               {items.length} items · {allLooks.length} look{allLooks.length !== 1 ? 's' : ''}
             </div>
           </div>
-          <button onClick={handleAddNewLook} style={{
+          <button onClick={onAddLook} style={{
             background: '#EDE9FE', color: '#7B1FA2', border: 'none',
             padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
             cursor: 'pointer', fontWeight: 600,
@@ -170,7 +206,73 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           </button>
         </div>
 
-        {/* At Studio only toggle + Look filter */}
+        {/* Look Order section — collapsible */}
+        {lookOrder.length > 1 && (
+          <div style={{ borderBottom: '1px solid #E0E0E0' }}>
+            <button
+              onClick={() => setShowLookOrder(!showLookOrder)}
+              style={{
+                width: '100%', padding: '8px 20px',
+                background: showLookOrder ? '#F3E8FF' : '#FAFAFA',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                fontSize: '11px', fontWeight: 600, color: '#7B1FA2',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ flex: 1 }}>Look Order ({lookOrder.length} looks)</span>
+              <span style={{ fontSize: '10px', opacity: 0.7 }}>{showLookOrder ? '▲ Hide' : '▼ Edit order'}</span>
+            </button>
+
+            {showLookOrder && (
+              <div style={{ padding: '8px 16px 12px', background: '#FBF5FF' }}>
+                <p style={{ fontSize: '10px', color: '#9575CD', marginBottom: '8px' }}>
+                  Drag ≡ or use ▲▼ to reorder looks in the shooting schedule.
+                </p>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={lookOrder} strategy={verticalListSortingStrategy}>
+                    {lookOrder.map((lookId, li) => (
+                      <SortableLookOrderRow
+                        key={lookId}
+                        lookId={lookId}
+                        li={li}
+                        total={lookOrder.length}
+                        isDraggingAny={dragActiveLookId !== null}
+                        itemCount={items.filter(i => i.looks.includes(lookId)).length}
+                        onMoveUp={() => li > 0 && onReorderLook(lookId, lookOrder[li - 1])}
+                        onMoveDown={() => li < lookOrder.length - 1 && onReorderLook(lookId, lookOrder[li + 1])}
+                      />
+                    ))}
+                  </SortableContext>
+                  <DragOverlay dropAnimation={{ duration: 150, easing: 'ease' }}>
+                    {dragActiveLookId != null ? (
+                      <div style={{
+                        padding: '6px 12px 6px 6px',
+                        background: '#D1C4E9',
+                        borderRadius: '6px',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                        fontSize: '12px', fontWeight: 600, color: '#7B1FA2',
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        cursor: 'grabbing',
+                        border: '1.5px solid #9575CD',
+                      }}>
+                        <span style={{ fontSize: '16px', opacity: 0.7, minWidth: '32px', textAlign: 'center' }}>≡</span>
+                        Look {dragActiveLookId}
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* At Studio only toggle */}
         <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button onClick={() => setReceivedOnly(!receivedOnly)} style={{
             padding: '5px 10px', borderRadius: '5px', fontSize: '11px',
@@ -307,7 +409,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               <input type="checkbox" checked={selectedIds.has(item.id)}
                 onChange={() => toggleSelect(item.id)} style={{ flexShrink: 0 }} />
 
-              {/* Item info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {item.styleNumber}
@@ -340,7 +441,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
                   </div>
                 ))}
 
-                {/* Add to look dropdown */}
                 <select
                   value=""
                   onChange={e => {
@@ -385,5 +485,94 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
         </div>
       </div>
     </>
+  )
+}
+
+// ── SortableLookOrderRow ──────────────────────────────────────────────────────
+
+function SortableLookOrderRow({
+  lookId, li, total, isDraggingAny, itemCount, onMoveUp, onMoveDown,
+}: {
+  lookId: number
+  li: number
+  total: number
+  isDraggingAny: boolean
+  itemCount: number
+  onMoveUp: () => void
+  onMoveDown: () => void
+}) {
+  const {
+    attributes, listeners, setNodeRef,
+    transform, transition, isDragging, isOver,
+  } = useSortable({ id: lookId })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        borderTop: isOver && !isDragging ? '2px solid #7B1FA2' : '2px solid transparent',
+        display: 'flex', alignItems: 'center', gap: '6px',
+        padding: '3px 0',
+        userSelect: 'none',
+      }}
+    >
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        style={{
+          background: 'none', border: 'none',
+          cursor: isDraggingAny ? 'grabbing' : 'grab',
+          color: '#9575CD', fontSize: '16px',
+          minWidth: '44px', minHeight: '36px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: '4px', flexShrink: 0,
+        }}
+        aria-label={`Drag to reorder Look ${lookId}`}
+        title="Drag to reorder"
+      >
+        ≡
+      </button>
+
+      <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#7B1FA2' }}>
+        Look {lookId}
+        <span style={{ fontWeight: 400, color: '#9575CD', marginLeft: '6px' }}>
+          {itemCount} item{itemCount !== 1 ? 's' : ''}
+        </span>
+      </span>
+
+      {/* Arrow buttons */}
+      <div style={{ display: 'flex', gap: '2px' }}>
+        <button
+          disabled={li === 0 || isDraggingAny}
+          onClick={onMoveUp}
+          style={{
+            padding: '2px 7px', fontSize: '11px',
+            border: '1px solid #C9B8F5', borderRadius: '4px',
+            background: li > 0 && !isDraggingAny ? '#fff' : 'transparent',
+            color: li > 0 && !isDraggingAny ? '#7B1FA2' : '#C9B8F5',
+            cursor: li > 0 && !isDraggingAny ? 'pointer' : 'default',
+            lineHeight: 1.4,
+          }}
+          title="Move up"
+        >▲</button>
+        <button
+          disabled={li === total - 1 || isDraggingAny}
+          onClick={onMoveDown}
+          style={{
+            padding: '2px 7px', fontSize: '11px',
+            border: '1px solid #C9B8F5', borderRadius: '4px',
+            background: li < total - 1 && !isDraggingAny ? '#fff' : 'transparent',
+            color: li < total - 1 && !isDraggingAny ? '#7B1FA2' : '#C9B8F5',
+            cursor: li < total - 1 && !isDraggingAny ? 'pointer' : 'default',
+            lineHeight: 1.4,
+          }}
+          title="Move down"
+        >▼</button>
+      </div>
+    </div>
   )
 }

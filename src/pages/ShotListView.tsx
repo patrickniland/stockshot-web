@@ -2,6 +2,25 @@
 // Full version: QR codes, angle tracking, look/product type grouping, label PDF export
 
 import { useState } from 'react'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
 import { StockItem, ShotStatus } from '../types'
@@ -29,6 +48,7 @@ export default function ShotListView() {
   })
   const [exporting, setExporting] = useState(false)
   const [showLookBuilder, setShowLookBuilder] = useState(false)
+  const [dragActiveId, setDragActiveId] = useState<number | null>(null)
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const bumpLook = useAppStore(s => s.bumpLook)
@@ -40,20 +60,18 @@ export default function ShotListView() {
   const clients = useAppStore(s => s.clients)
   const shotListLocationFilter = useAppStore(s => s.shotListLocationFilter)
   const setShotListLocationFilter = useAppStore(s => s.setShotListLocationFilter)
+  const syncStatus = useAppStore(s => s.syncStatus)
 
   const shoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const allItems = shoot?.items ?? []
 
   // Only show items that have been formally scanned in (have custody history).
-  // Unscanned imports default to with_client but shouldn't crowd the shot list.
   const scannedItems = allItems.filter(i => (i.custodyHistory ?? []).length > 0)
 
-  // Location filter narrows within scanned items; 'all' shows all scanned
   const locationFiltered = shotListLocationFilter === 'all'
     ? scannedItems
     : scannedItems.filter(i => i.custodyLocation === shotListLocationFilter)
 
-  // Get client product types for assignment
   const client = clients.find(c => c.id === shoot?.clientId) ?? null
   const productTypes = client?.productTypes ?? []
 
@@ -73,6 +91,27 @@ export default function ShotListView() {
     storeAssignProductType(itemId, productType)
   }
 
+  // ── dnd-kit ────────────────────────────────────────────────────────────────
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  function handleDragStart(event: DragStartEvent) {
+    setDragActiveId(event.active.id as number)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setDragActiveId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    reorderLook(active.id as number, over.id as number)
+  }
+
+  // ── Export ─────────────────────────────────────────────────────────────────
+
   async function handleLabelExport() {
     setExporting(true)
     try {
@@ -83,11 +122,11 @@ export default function ShotListView() {
     }
   }
 
-  // Group items
+  // ── Grouping ───────────────────────────────────────────────────────────────
+
   const groups: Array<{ name: string; look?: number; items: StockItem[] }> = []
   if (groupBy === 'look') {
     const presentLooks = new Set(filtered.flatMap(i => i.looks))
-    // Use lookOrder for display order; append any looks not yet in lookOrder
     const orderedLooks = [
       ...(shoot?.lookOrder ?? []),
       ...[...presentLooks].filter(l => !shoot?.lookOrder.includes(l)).sort((a, b) => a - b),
@@ -107,6 +146,34 @@ export default function ShotListView() {
   } else {
     groups.push({ name: '', items: filtered })
   }
+
+  const lookGroups = groupBy === 'look' ? groups.filter(g => g.look != null) : []
+  const noLookGroup = groupBy === 'look' ? (groups.find(g => g.look == null) ?? null) : null
+
+  // ── Shot row callbacks (shared between sortable and non-sortable paths) ─────
+
+  function makeShotRowProps(item: StockItem, i: number) {
+    return {
+      item,
+      index: i,
+      expanded: expandedId === item.id,
+      productTypes: productTypes.map(p => p.name),
+      locationFilter: shotListLocationFilter,
+      onToggle: () => setExpandedId(expandedId === item.id ? null : item.id),
+      onAngleToggle: (angle: string) => storeToggleAngle(item.id, angle),
+      onShotStatusChange: (s: ShotStatus) => {
+        const now = new Date().toISOString()
+        storeUpdateItem(item.id, {
+          shotStatus: s,
+          shotAt: s === 'shot' ? now : null,
+          completedAngles: s === 'shot' ? item.requiredAngles : [],
+        })
+      },
+      onAssignProductType: (pt: string) => assignProductType(item.id, pt),
+    }
+  }
+
+  // ── Guard ──────────────────────────────────────────────────────────────────
 
   if (!shoot) {
     return (
@@ -181,52 +248,86 @@ export default function ShotListView() {
           <div style={{ padding: '2rem', textAlign: 'center', color: '#888', fontSize: '13px' }}>
             No items here yet. Items appear once scanned in.
           </div>
-        ) : groups.map((group, gi) => (
-          <div key={group.name}>
-            {group.name && (
-              <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ flex: 1 }}>{group.name} — {group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
-                {groupBy === 'look' && group.look != null && (
-                  <div style={{ display: 'flex', gap: '2px' }}>
-                    <button
-                      disabled={gi === 0}
-                      onClick={() => reorderLook(group.look!, groups[gi - 1].look!)}
-                      style={{ padding: '1px 6px', fontSize: '11px', border: '1px solid #C9B8F5', borderRadius: '4px', background: gi > 0 ? '#fff' : 'transparent', color: gi > 0 ? '#7B1FA2' : '#C9B8F5', cursor: gi > 0 ? 'pointer' : 'default', lineHeight: 1.4 }}
-                      title="Move up in shooting schedule"
-                    >▲</button>
-                    <button
-                      disabled={gi === groups.length - 1}
-                      onClick={() => reorderLook(group.look!, groups[gi + 1].look!)}
-                      style={{ padding: '1px 6px', fontSize: '11px', border: '1px solid #C9B8F5', borderRadius: '4px', background: gi < groups.length - 1 ? '#fff' : 'transparent', color: gi < groups.length - 1 ? '#7B1FA2' : '#C9B8F5', cursor: gi < groups.length - 1 ? 'pointer' : 'default', lineHeight: 1.4 }}
-                      title="Move down in shooting schedule"
-                    >▼</button>
+        ) : groupBy === 'look' ? (
+          <>
+            <DndContext
+              sensors={syncStatus === 'syncing' ? [] : sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={lookGroups.map(g => g.look!)}
+                strategy={verticalListSortingStrategy}
+              >
+                {lookGroups.map((group, gi) => (
+                  <SortableLookGroup
+                    key={group.look}
+                    lookId={group.look!}
+                    groupName={group.name}
+                    itemCount={group.items.length}
+                    gi={gi}
+                    totalLookGroups={lookGroups.length}
+                    isDraggingAny={dragActiveId !== null}
+                    onMoveUp={() => gi > 0 && reorderLook(group.look!, lookGroups[gi - 1].look!)}
+                    onMoveDown={() => gi < lookGroups.length - 1 && reorderLook(group.look!, lookGroups[gi + 1].look!)}
+                  >
+                    {group.items.map((item, i) => (
+                      <ShotRow key={item.id} {...makeShotRowProps(item, i)} />
+                    ))}
+                  </SortableLookGroup>
+                ))}
+              </SortableContext>
+
+              <DragOverlay dropAnimation={{ duration: 200, easing: 'ease' }}>
+                {dragActiveId != null ? (
+                  <div style={{
+                    padding: '8px 12px 8px 6px',
+                    background: '#D1C4E9',
+                    borderRadius: '6px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                    fontSize: '12px', fontWeight: 700, color: '#7B1FA2',
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    cursor: 'grabbing',
+                    userSelect: 'none',
+                    border: '2px solid #9575CD',
+                  }}>
+                    <span style={{ fontSize: '18px', opacity: 0.7, minWidth: '44px', textAlign: 'center' }}>≡</span>
+                    Look {dragActiveId}
+                    <span style={{ opacity: 0.6, fontWeight: 400 }}>
+                      · {lookGroups.find(g => g.look === dragActiveId)?.items.length ?? 0} items
+                    </span>
                   </div>
-                )}
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+
+            {/* No Look Assigned — not sortable, always at bottom */}
+            {noLookGroup && (
+              <div>
+                <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1 }}>
+                  No Look Assigned — {noLookGroup.items.length} item{noLookGroup.items.length !== 1 ? 's' : ''}
+                </div>
+                {noLookGroup.items.map((item, i) => (
+                  <ShotRow key={item.id} {...makeShotRowProps(item, i)} />
+                ))}
               </div>
             )}
-            {group.items.map((item, i) => (
-              <ShotRow
-                key={item.id}
-                item={item}
-                index={i}
-                expanded={expandedId === item.id}
-                productTypes={productTypes.map(p => p.name)}
-                locationFilter={shotListLocationFilter}
-                onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                onAngleToggle={angle => storeToggleAngle(item.id, angle)}
-                onShotStatusChange={s => {
-                  const now = new Date().toISOString()
-                  storeUpdateItem(item.id, {
-                    shotStatus: s,
-                    shotAt: s === 'shot' ? now : null,
-                    completedAngles: s === 'shot' ? item.requiredAngles : [],
-                  })
-                }}
-                onAssignProductType={pt => assignProductType(item.id, pt)}
-              />
-            ))}
-          </div>
-        ))}
+          </>
+        ) : (
+          groups.map((group) => (
+            <div key={group.name || 'all'}>
+              {group.name && (
+                <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1 }}>
+                  {group.name} — {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                </div>
+              )}
+              {group.items.map((item, i) => (
+                <ShotRow key={item.id} {...makeShotRowProps(item, i)} />
+              ))}
+            </div>
+          ))
+        )}
       </div>
 
       {/* Look Builder panel */}
@@ -236,6 +337,7 @@ export default function ShotListView() {
           lookOrder={shoot.lookOrder}
           onUpdateItem={(itemId, looks) => storeUpdateItem(itemId, { looks })}
           onAddLook={() => bumpLook()}
+          onReorderLook={reorderLook}
           onClose={() => setShowLookBuilder(false)}
         />
       )}
@@ -346,6 +448,116 @@ export default function ShotListView() {
   )
 }
 
+// ── SortableLookGroup ─────────────────────────────────────────────────────────
+
+function SortableLookGroup({
+  lookId, groupName, itemCount, gi, totalLookGroups, isDraggingAny,
+  onMoveUp, onMoveDown, children,
+}: {
+  lookId: number
+  groupName: string
+  itemCount: number
+  gi: number
+  totalLookGroups: number
+  isDraggingAny: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+  children: React.ReactNode
+}) {
+  const {
+    attributes, listeners, setNodeRef,
+    transform, transition, isDragging, isOver,
+  } = useSortable({ id: lookId })
+
+  // When transform is non-null the element is being moved by dnd-kit.
+  // position:sticky breaks under CSS transform, so switch to relative while animated.
+  const isAnimating = !!(transform && (transform.x !== 0 || transform.y !== 0 || transform.scaleX !== 1 || transform.scaleY !== 1))
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        // Drop target indicator — 2px line at the top of the hovered row
+        borderTop: isOver && !isDragging ? '2px solid #7B1FA2' : '2px solid transparent',
+      }}
+    >
+      {/* Group header */}
+      <div style={{
+        padding: '0 4px 0 0',
+        background: '#EDE9FE',
+        fontSize: '12px', fontWeight: 700, color: '#7B1FA2',
+        borderBottom: '1px solid #E0E0E0',
+        position: isAnimating ? 'relative' : 'sticky',
+        top: 0, zIndex: isAnimating ? 0 : 1,
+        display: 'flex', alignItems: 'center',
+        userSelect: 'none',
+      }}>
+        {/* Drag handle — primary affordance, full 44×44 touch target */}
+        <button
+          {...attributes}
+          {...listeners}
+          style={{
+            background: 'none', border: 'none',
+            cursor: isDraggingAny ? 'grabbing' : 'grab',
+            color: '#9575CD',
+            fontSize: '18px',
+            minWidth: '44px', minHeight: '44px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+            borderRadius: '4px',
+            lineHeight: 1,
+          }}
+          aria-label={`Drag to reorder ${groupName}`}
+          title="Drag to reorder"
+        >
+          ≡
+        </button>
+
+        <span style={{ flex: 1, padding: '8px 0' }}>
+          {groupName} — {itemCount} item{itemCount !== 1 ? 's' : ''}
+        </span>
+
+        {/* Up/Down arrows — secondary affordance, muted styling */}
+        <div style={{ display: 'flex', gap: '2px', marginLeft: '4px' }}>
+          <button
+            disabled={gi === 0 || isDraggingAny}
+            onClick={onMoveUp}
+            style={{
+              padding: '1px 6px', fontSize: '11px',
+              border: '1px solid #C9B8F5', borderRadius: '4px',
+              background: gi > 0 && !isDraggingAny ? '#fff' : 'transparent',
+              color: gi > 0 && !isDraggingAny ? '#7B1FA2' : '#C9B8F5',
+              cursor: gi > 0 && !isDraggingAny ? 'pointer' : 'default',
+              lineHeight: 1.4,
+            }}
+            title="Move up in shooting schedule"
+          >▲</button>
+          <button
+            disabled={gi === totalLookGroups - 1 || isDraggingAny}
+            onClick={onMoveDown}
+            style={{
+              padding: '1px 6px', fontSize: '11px',
+              border: '1px solid #C9B8F5', borderRadius: '4px',
+              background: gi < totalLookGroups - 1 && !isDraggingAny ? '#fff' : 'transparent',
+              color: gi < totalLookGroups - 1 && !isDraggingAny ? '#7B1FA2' : '#C9B8F5',
+              cursor: gi < totalLookGroups - 1 && !isDraggingAny ? 'pointer' : 'default',
+              lineHeight: 1.4,
+            }}
+            title="Move down in shooting schedule"
+          >▼</button>
+        </div>
+      </div>
+
+      {children}
+    </div>
+  )
+}
+
+// ── ShotRow ───────────────────────────────────────────────────────────────────
+
 const CUSTODY_ICON: Record<string, string> = {
   at_client:  '📦',
   in_transit: '🚚',
@@ -388,7 +600,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
           </div>
         </div>
 
-        {/* Look badges */}
         <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
           {item.looks.map(l => (
             <span key={l} style={{ fontSize: '9px', fontWeight: 700, background: '#EDE9FE', color: '#7B1FA2', padding: '2px 5px', borderRadius: '3px' }}>
@@ -397,7 +608,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
           ))}
         </div>
 
-        {/* Angle progress or warning */}
         {angleProgress && (
           <span style={{ fontSize: '11px', color: '#666', flexShrink: 0 }}>{angleProgress}</span>
         )}
@@ -407,7 +617,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
           </span>
         )}
 
-        {/* Shot status */}
         <div style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '99px', background: shotBg, color: shotColor, flexShrink: 0 }}>
           {item.shotStatus === 'shot' ? '✓ Shot' : item.shotStatus === 'notRequired' ? 'N/A' : 'Not Shot'}
         </div>
@@ -420,7 +629,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
         <div style={{ padding: '12px 16px 16px 52px', background: '#F8F8F8', borderTop: '1px solid #F0F0F0' }}>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
 
-            {/* QR Code */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <QRCode value={item.qrCodeValue} size={90} />
               <span style={{ fontSize: '9px', color: '#888', fontFamily: 'monospace', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -429,7 +637,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
             </div>
 
             <div style={{ flex: 1 }}>
-              {/* Product type assignment */}
               {productTypes.length > 0 && (
                 <div style={{ marginBottom: '10px' }}>
                   <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '4px' }}>Product type</label>
@@ -444,7 +651,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
                 </div>
               )}
 
-              {/* Angle pills */}
               {hasAngles ? (
                 <div style={{ marginBottom: '10px' }}>
                   <p style={{ fontSize: '10px', color: '#888', marginBottom: '6px' }}>Tap angles to mark done:</p>
@@ -473,7 +679,6 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
                 </p>
               )}
 
-              {/* Shot status override */}
               <div style={{ display: 'flex', gap: '6px' }}>
                 {(['notShot', 'shot', 'notRequired'] as const).map(s => (
                   <button key={s} onClick={(e) => { e.stopPropagation(); onShotStatusChange(s) }} style={{

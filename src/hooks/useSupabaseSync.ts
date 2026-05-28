@@ -156,10 +156,26 @@ export async function pullAll(): Promise<void> {
 
     if (pullId !== activePullId) return
 
-    store.setShoots(shoots)
+    // Preserve local items for shoots that are ahead of DB.
+    // This handles the race where items were added locally but the async upsert
+    // hasn't finished yet — pullAll would otherwise wipe them with an empty array.
+    const localShoots = useAppStore.getState().savedShoots
+    const mergedShoots = shoots.map(dbShoot => {
+      const local = localShoots.find(s => s.id === dbShoot.id)
+      if (local && local.items.length > dbShoot.items.length) {
+        return { ...dbShoot, items: local.items }
+      }
+      return dbShoot
+    })
+    // Also keep shoots that exist locally but aren't in DB yet (import in flight)
+    const dbShootIds = new Set(shoots.map(s => s.id))
+    const localOnly = localShoots.filter(s => !dbShootIds.has(s.id))
+    const allShoots = [...mergedShoots, ...localOnly]
+
+    store.setShoots(allShoots)
     store.setClients(clients)
 
-    const activeShoots = shoots.filter(s => !s.deletedAt)
+    const activeShoots = allShoots.filter(s => !s.deletedAt)
     if (activeShoots.length > 0) {
       const currentExists = activeShoots.some(s => s.id === activeShootId)
       if (!activeShootId || !currentExists) {
