@@ -337,7 +337,6 @@ export default function ShotListView() {
           lookOrder={shoot.lookOrder}
           onUpdateItem={(itemId, looks) => storeUpdateItem(itemId, { looks })}
           onAddLook={() => bumpLook()}
-          onReorderLook={reorderLook}
           onClose={() => setShowLookBuilder(false)}
         />
       )}
