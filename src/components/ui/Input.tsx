@@ -1,4 +1,4 @@
-import { InputHTMLAttributes, ElementType, useRef, useState } from 'react'
+import { InputHTMLAttributes, ElementType, useRef, useState, forwardRef, useCallback } from 'react'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   scannerMode?: boolean
@@ -6,31 +6,33 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   Icon?: ElementType
 }
 
-export function Input({
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   scannerMode = false,
   onKeyboardFallback,
   Icon,
   className = '',
   ...props
-}: InputProps) {
+}, ref) {
   const [keyboardOverride, setKeyboardOverride] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const internalRef = useRef<HTMLInputElement>(null)
+
+  const setRefs = useCallback((el: HTMLInputElement | null) => {
+    (internalRef as React.MutableRefObject<HTMLInputElement | null>).current = el
+    if (typeof ref === 'function') ref(el)
+    else if (ref) (ref as React.MutableRefObject<HTMLInputElement | null>).current = el
+  }, [ref])
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     props.onBlur?.(e)
     if (scannerMode && !keyboardOverride) {
-      setTimeout(() => inputRef.current?.focus(), 0)
+      setTimeout(() => internalRef.current?.focus(), 0)
     }
   }
 
   const activateKeyboard = () => {
     setKeyboardOverride(true)
     onKeyboardFallback?.()
-    setTimeout(() => inputRef.current?.focus(), 0)
-  }
-
-  const deactivateKeyboard = () => {
-    setKeyboardOverride(false)
+    setTimeout(() => internalRef.current?.focus(), 0)
   }
 
   const inputMode = scannerMode && !keyboardOverride ? 'none' : undefined
@@ -44,27 +46,25 @@ export function Input({
           </span>
         )}
         <input
-          ref={inputRef}
+          ref={setRefs}
           {...props}
           inputMode={inputMode}
           autoComplete={scannerMode ? 'off' : props.autoComplete}
           onBlur={handleBlur}
           className={[
             'w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white',
-            'px-3 py-2 text-[var(--text-base)] text-slate-900 placeholder:text-slate-400',
+            'px-3 py-2 text-slate-900 placeholder:text-slate-400',
             'focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:border-transparent',
             'touch-target',
             Icon ? 'pl-9' : '',
             className,
-          ]
-            .filter(Boolean)
-            .join(' ')}
+          ].filter(Boolean).join(' ')}
         />
       </div>
       {scannerMode && (
         <button
           type="button"
-          onClick={keyboardOverride ? deactivateKeyboard : activateKeyboard}
+          onClick={keyboardOverride ? () => setKeyboardOverride(false) : activateKeyboard}
           className="self-start text-[var(--text-xs)] text-slate-400 hover:text-slate-600 underline underline-offset-2"
         >
           {keyboardOverride ? 'Back to scanner mode' : 'Use keyboard instead'}
@@ -72,4 +72,4 @@ export function Input({
       )}
     </div>
   )
-}
+})

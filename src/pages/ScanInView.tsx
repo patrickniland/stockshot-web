@@ -1,11 +1,15 @@
-// StockShot — Scan In View
-
 import { useState, useRef, useEffect } from 'react'
+import {
+  CaretLeft, CaretRight, Camera, X, ArrowCounterClockwise, Gear, Package,
+} from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
 import { StockItem, CustodyLocation, CustodyEvent } from '../types'
 import CameraScanner from '../components/CameraScanner'
 import ShootPicker from '../components/ShootPicker'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,22 +61,26 @@ function locationLabel(loc: CustodyLocation): string {
   }
 }
 
-const LOCATION_ICON: Record<CustodyLocation, string> = {
-  at_client:  '📦',
-  in_transit: '🚚',
-  at_studio:  '🏠',
+const LOCATION_STYLE: Record<CustodyLocation, { text: string; bg: string; activeBg: string }> = {
+  at_studio:  { text: 'text-[var(--color-success)]', bg: 'bg-[var(--color-success)]', activeBg: 'bg-[var(--color-success)]/10' },
+  at_client:  { text: 'text-[var(--color-warning)]', bg: 'bg-[var(--color-warning)]', activeBg: 'bg-[var(--color-warning)]/10' },
+  in_transit: { text: 'text-[var(--color-info)]',    bg: 'bg-[var(--color-info)]',    activeBg: 'bg-[var(--color-info)]/10' },
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ScanInView() {
   useNavSync({ onEnter: 'pull' })
-  const inputRef = useRef<HTMLInputElement>(null)
+
+  const scanInputRef = useRef<HTMLInputElement>(null)
   const [scanInput, setScanInput] = useState('')
   const [showCamera, setShowCamera] = useState(false)
   const [recentScans, setRecentScans] = useState<RecentScan[]>([])
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [activeStatView, setActiveStatView] = useState<CustodyLocation>('at_studio')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [showAllScans, setShowAllScans] = useState(false)
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
@@ -93,9 +101,7 @@ export default function ScanInView() {
   const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
   const lastScanFeedback = useAppStore(s => s.lastScanFeedback)
 
-  // All non-deleted shoots for the dropdown
   const activeShoots = savedShoots.filter(s => !s.deletedAt)
-
   const [selectedShootId, setSelectedShootId] = useState<string>(activeShootId ?? '')
 
   function selectShoot(id: string) {
@@ -103,7 +109,6 @@ export default function ScanInView() {
     setActiveShootId(id)
   }
 
-  // Sync selectedShootId if activeShootId changes and selection becomes invalid
   useEffect(() => {
     if (selectedShootId && activeShoots.some(s => s.id === selectedShootId)) return
     setSelectedShootId(activeShootId ?? activeShoots[0]?.id ?? '')
@@ -111,18 +116,14 @@ export default function ScanInView() {
 
   useEffect(() => {
     setLastScanFeedback(null)
-    inputRef.current?.focus()
+    scanInputRef.current?.focus()
   }, [])
 
   const selectedShoot = savedShoots.find(s => s.id === selectedShootId) ?? null
   const lookOrder = selectedShoot?.lookOrder ?? []
   const totalLooks = lookOrder.length > 0 ? Math.max(...lookOrder) : 0
-
   const canScan = !!currentOperator.trim() && !!selectedShootId
 
-  // Stats for the selected shoot
-  // with_client only counts items formally scanned (has history) — unscanned imports default to with_client
-  // and would otherwise make the count look non-zero before any scanning.
   const shootItems = selectedShoot?.items ?? []
   const atStudioCount  = shootItems.filter(i => i.custodyLocation === 'at_studio').length
   const atClientCount  = shootItems.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
@@ -134,16 +135,16 @@ export default function ScanInView() {
     return true
   })
 
+  const atClientItems = shootItems.filter(i =>
+    i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0
+  )
+
   // ── Scan logic ──────────────────────────────────────────────────────────────
 
   function handleScan(barcode: string) {
     const raw = barcode.trim()
-    console.log('[Scan] handleScan — raw:', raw, '| canScan:', canScan, '| operator:', JSON.stringify(currentOperator), '| selectedShootId:', selectedShootId)
-    const selectedShootItems = savedShoots.find(s => s.id === selectedShootId)?.items ?? []
-    console.log('[Scan] selectedShoot items:', selectedShootItems.length, '| total shoots:', savedShoots.map(s => `${s.name}(${s.items.length})`).join(', '))
     if (!raw || !canScan) return
 
-    // Search all shoots for a matching item
     let foundItem: StockItem | null = null
     let foundShootId: string | null = null
     for (const shoot of savedShoots) {
@@ -152,9 +153,7 @@ export default function ScanInView() {
     }
 
     if (!foundItem) {
-      // Not found — prompt to add
       if (selectedShoot?.isUnassigned) {
-        // Auto-add to Unassigned shoot
         doAddNewItem(raw)
       } else {
         setPendingAction({ type: 'confirmAdd', barcode: raw })
@@ -162,7 +161,6 @@ export default function ScanInView() {
       return
     }
 
-    // Found — check if it's in the right shoot
     if (foundShootId !== selectedShootId) {
       const fromShoot = savedShoots.find(s => s.id === foundShootId)
       setPendingAction({
@@ -174,7 +172,6 @@ export default function ScanInView() {
       return
     }
 
-    // Already at this location AND has been previously scanned (not just a default value)?
     const hasHistory = (foundItem.custodyHistory ?? []).length > 0
     if (foundItem.custodyLocation === scanInLocation && hasHistory) {
       appendFeedback('already', foundItem)
@@ -227,7 +224,6 @@ export default function ScanInView() {
   }
 
   function appendFeedback(type: 'already', item: StockItem) {
-    // Visual warning — no history change
     const loc = locationLabel(item.custodyLocation)
     setLastScanFeedback({
       id: Date.now().toString(),
@@ -303,416 +299,483 @@ export default function ScanInView() {
     if (!v) return
     handleScan(v)
     setScanInput('')
-    setTimeout(() => inputRef.current?.focus(), 50)
+    setTimeout(() => scanInputRef.current?.focus(), 50)
   }
 
   function handleCameraScan(value: string) {
     handleScan(value)
     setShowCamera(false)
-    setTimeout(() => inputRef.current?.focus(), 50)
+    setTimeout(() => scanInputRef.current?.focus(), 50)
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Shared fragments ────────────────────────────────────────────────────────
 
-  const STAT_PILLS: { loc: CustodyLocation; label: string; color: string; count: number }[] = [
-    { loc: 'at_studio',  label: 'At Studio',  color: '#2E7D32', count: atStudioCount },
-    { loc: 'at_client',  label: 'At Client',  color: '#E65100', count: atClientCount },
-    { loc: 'in_transit', label: 'In Transit', color: '#1565C0', count: inTransitCount },
+  const statRows: { loc: CustodyLocation; label: string; count: number }[] = [
+    { loc: 'at_studio',  label: 'At Studio',  count: atStudioCount },
+    { loc: 'at_client',  label: 'At Client',  count: atClientCount },
+    { loc: 'in_transit', label: 'In Transit', count: inTransitCount },
   ]
 
-  return (
-    <div style={{ display: 'flex', height: '100%' }}>
-
-      {/* ── Left: scan controls ── */}
-      <div style={{ width: '500px', flexShrink: 0, overflowY: 'auto', padding: '1.5rem', background: '#F5F5F5' }}>
-
-      {/* Stats / location tabs */}
-      <div style={{ display: 'flex', background: '#fff', borderRadius: '10px', border: '1px solid #E0E0E0', marginBottom: '1rem', overflow: 'hidden' }}>
-        {STAT_PILLS.map((pill, idx) => (
-          <div key={pill.loc} style={{ display: 'flex', flex: 1 }}>
-            {idx > 0 && <div style={{ width: '1px', background: '#E0E0E0' }} />}
-            <StatPill
-              value={pill.count} label={pill.label} color={pill.color}
-              isActive={activeStatView === pill.loc}
-              onClick={() => setActiveStatView(pill.loc)}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Controls + Scanner card */}
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem', border: `1.5px solid ${stylingMode ? '#F59E0B' : '#E0E0E0'}` }}>
-        <p style={{ fontSize: '17px', fontWeight: 600, color: '#111', textAlign: 'center', marginBottom: '14px' }}>Scan In</p>
-
-        {/* Operator */}
-        <ControlRow label="Operator">
-          <input
-            value={currentOperator}
-            onChange={e => setCurrentOperator(e.target.value)}
-            placeholder="Your name..."
-            style={inputStyle(!!currentOperator)}
-          />
-        </ControlRow>
-
-        {/* Shoot selector */}
-        <ControlRow label="Shoot">
-          <ShootPicker
-            shoots={activeShoots}
-            value={selectedShootId}
-            onChange={selectShoot}
-          />
-        </ControlRow>
-
-        {/* Location */}
-        <ControlRow label="Location">
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {(['at_studio', 'at_client'] as CustodyLocation[]).map(loc => (
-              <button
-                key={loc}
-                onClick={() => setScanInLocation(loc)}
-                style={{
-                  padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                  border: `1.5px solid ${scanInLocation === loc ? '#2E7D32' : '#E0E0E0'}`,
-                  background: scanInLocation === loc ? '#E8F5E9' : '#F9F9F9',
-                  color: scanInLocation === loc ? '#2E7D32' : '#666',
-                  cursor: 'pointer',
-                }}
-              >
-                {locationLabel(loc)}
-              </button>
-            ))}
-          </div>
-        </ControlRow>
-
-        {/* Look stepper */}
-        <ControlRow label="Look">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <button onClick={() => currentIntakeLook > 1 && setCurrentIntakeLook(currentIntakeLook - 1)}
-              disabled={currentIntakeLook <= 1}
-              style={lookNavBtn(currentIntakeLook > 1)}>‹</button>
-            <div style={{ flex: 1, textAlign: 'center', background: currentIntakeLook === 0 ? '#666' : '#7B1FA2', color: '#fff', padding: '5px 10px', borderRadius: '6px', minWidth: '80px' }}>
-              {currentIntakeLook === 0
-                ? <span style={{ fontSize: '12px', fontWeight: 700 }}>No Look</span>
-                : <span style={{ fontSize: '12px', fontWeight: 700 }}>Look {currentIntakeLook} <span style={{ opacity: 0.7 }}>/ {totalLooks}</span></span>
-              }
-            </div>
-            <button onClick={() => currentIntakeLook < totalLooks && setCurrentIntakeLook(currentIntakeLook + 1)}
-              disabled={currentIntakeLook >= totalLooks}
-              style={lookNavBtn(currentIntakeLook < totalLooks)}>›</button>
-            <button onClick={bumpLook} style={newLookBtn}>+ Look</button>
-          </div>
-        </ControlRow>
-
-        {/* Styling Mode toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-          <button
-            onClick={() => setStylingMode(!stylingMode)}
-            style={{
-              flex: 1, padding: '7px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 600,
-              border: `1.5px solid ${stylingMode ? '#F59E0B' : '#E0E0E0'}`,
-              background: stylingMode ? '#FFF8E1' : '#F9F9F9',
-              color: stylingMode ? '#B45309' : '#666',
-              cursor: 'pointer',
-            }}
-          >
-            {stylingMode ? '✦ Styling Mode ON' : 'Enter Styling Mode'}
-          </button>
-          {stylingMode && (
-            <button
-              onClick={() => setStylingMode(false)}
-              style={{
-                padding: '7px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
-                background: '#F59E0B', border: 'none', color: '#fff', cursor: 'pointer',
-              }}
-            >
-              EXIT
-            </button>
-          )}
-        </div>
-
-        <hr style={{ border: 'none', borderTop: '1px solid #F0F0F0', marginBottom: '14px' }} />
-
-        {/* Operator required hint */}
-        {!currentOperator.trim() && (
-          <p style={{ fontSize: '12px', color: '#E65100', textAlign: 'center', marginBottom: '10px', fontWeight: 500 }}>
-            Enter operator name to begin scanning
-          </p>
-        )}
-
-        {/* Scan input */}
-        <input
-          ref={inputRef}
-          value={scanInput}
-          onChange={e => setScanInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && triggerScan()}
-          placeholder={canScan ? 'Scan or type barcode...' : 'Enter operator name first'}
-          disabled={!canScan}
-          style={{
-            width: '100%', padding: '12px', fontSize: '18px', fontFamily: 'monospace',
-            textAlign: 'center', border: `1px solid ${canScan ? '#E0E0E0' : '#F0F0F0'}`,
-            borderRadius: '8px', boxSizing: 'border-box', marginBottom: '10px', outline: 'none',
-            background: canScan ? '#fff' : '#FAFAFA', color: canScan ? '#111' : '#999',
-          }}
+  const settingsFields = (
+    <div className="flex flex-col gap-3">
+      {/* Operator */}
+      <ControlRow label="Operator">
+        <Input
+          value={currentOperator}
+          onChange={e => setCurrentOperator(e.target.value)}
+          placeholder="Your name..."
+          className={currentOperator ? 'border-[var(--color-success)]' : ''}
         />
+      </ControlRow>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={triggerScan} disabled={!canScan || !scanInput.trim()} style={{
-            flex: 1, padding: '10px', fontSize: '14px', fontWeight: 600,
-            background: (!canScan || !scanInput.trim()) ? '#E0E0E0' : stylingMode ? '#F59E0B' : '#2E7D32',
-            color: (!canScan || !scanInput.trim()) ? '#999' : '#fff',
-            border: 'none', borderRadius: '8px', cursor: (canScan && scanInput.trim()) ? 'pointer' : 'default',
-          }}>
-            ✓ Scan In
-          </button>
-          <button onClick={() => setShowCamera(true)} disabled={!canScan} style={{
-            padding: '10px 14px', background: canScan ? '#1565C0' : '#E0E0E0', border: 'none',
-            borderRadius: '8px', fontSize: '13px', cursor: canScan ? 'pointer' : 'default',
-            color: canScan ? '#fff' : '#999',
-          }}>
-            Camera
-          </button>
-          <button onClick={() => setScanInput('')} style={{
-            padding: '10px 14px', background: '#F5F5F5', border: 'none',
-            borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#444',
-          }}>
-            Clear
-          </button>
+      {/* Shoot */}
+      <ControlRow label="Shoot">
+        <ShootPicker shoots={activeShoots} value={selectedShootId} onChange={selectShoot} />
+      </ControlRow>
+
+      {/* Location */}
+      <ControlRow label="Location">
+        <div className="flex gap-1.5">
+          {(['at_studio', 'at_client'] as CustodyLocation[]).map(loc => (
+            <button
+              key={loc}
+              onClick={() => setScanInLocation(loc)}
+              className={[
+                'px-3 py-1.5 rounded-[var(--radius-md)] text-[var(--text-sm)] font-semibold border touch-target transition-colors',
+                scanInLocation === loc
+                  ? `border-[var(--color-success)] ${LOCATION_STYLE[loc].activeBg} ${LOCATION_STYLE[loc].text}`
+                  : 'border-[var(--color-border)] bg-white text-slate-500 hover:bg-slate-50',
+              ].join(' ')}
+            >
+              {locationLabel(loc)}
+            </button>
+          ))}
         </div>
-      </div>
+      </ControlRow>
 
-      {/* Scan feedback banner */}
-      {lastScanFeedback && (
-        <div style={{
-          borderRadius: '10px',
-          padding: '14px 16px',
-          marginBottom: '1rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          background: lastScanFeedback.type === 'success'
-            ? (stylingMode ? '#F59E0B' : '#2E7D32')
-            : lastScanFeedback.type === 'alreadyAtLocation' ? '#E65100'
-            : '#B71C1C',
-        }}>
-          <span style={{ fontSize: '20px' }}>
-            {lastScanFeedback.type === 'success' ? LOCATION_ICON[scanInLocation] : '⚠'}
-          </span>
-          <div>
-            <div style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>{lastScanFeedback.message}</div>
-            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', fontFamily: 'monospace' }}>{lastScanFeedback.scannedValue}</div>
+      {/* Look */}
+      <ControlRow label="Look">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="secondary" size="sm"
+            onClick={() => currentIntakeLook > 1 && setCurrentIntakeLook(currentIntakeLook - 1)}
+            disabled={currentIntakeLook <= 1}
+            className="w-8 px-0 flex items-center justify-center"
+          >
+            <CaretLeft size={14} />
+          </Button>
+          <div className="flex-1 text-center bg-[var(--color-accent)] text-white px-3 py-1.5 rounded-[var(--radius-md)] text-[var(--text-sm)] font-semibold min-w-[80px]">
+            {currentIntakeLook === 0 ? 'No Look' : `Look ${currentIntakeLook} / ${totalLooks}`}
           </div>
+          <Button
+            variant="secondary" size="sm"
+            onClick={() => currentIntakeLook < totalLooks && setCurrentIntakeLook(currentIntakeLook + 1)}
+            disabled={currentIntakeLook >= totalLooks}
+            className="w-8 px-0 flex items-center justify-center"
+          >
+            <CaretRight size={14} />
+          </Button>
+          <Button variant="secondary" size="sm" onClick={bumpLook}>
+            + Look
+          </Button>
         </div>
+      </ControlRow>
+    </div>
+  )
+
+  const scanField = (
+    <div className="flex flex-col gap-3">
+      {/* Operator required hint */}
+      {!currentOperator.trim() && (
+        <p className="text-[var(--text-xs)] text-[var(--color-warning)] text-center font-medium">
+          Enter operator name to begin scanning
+        </p>
       )}
 
-      {/* Pending action: wrong shoot */}
+      <Input
+        ref={scanInputRef}
+        scannerMode
+        value={scanInput}
+        onChange={e => setScanInput(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && triggerScan()}
+        placeholder={canScan ? 'Scan or type barcode...' : 'Enter operator name first'}
+        disabled={!canScan}
+        className="text-center font-mono text-[var(--text-xl)] py-3"
+      />
+
+      <div className="flex gap-2">
+        <Button
+          variant="primary" size="lg"
+          className="flex-1"
+          onClick={triggerScan}
+          disabled={!canScan || !scanInput.trim()}
+        >
+          ✓ Scan In
+        </Button>
+        <Button
+          variant="primary" size="lg"
+          Icon={Camera}
+          onClick={() => setShowCamera(true)}
+          disabled={!canScan}
+        >
+          Camera
+        </Button>
+        <Button variant="ghost" size="lg" onClick={() => setScanInput('')}>
+          Clear
+        </Button>
+      </div>
+    </div>
+  )
+
+  const feedbackBanner = lastScanFeedback && (
+    <div className={[
+      'rounded-[var(--radius-lg)] px-4 py-3 flex items-center gap-3',
+      lastScanFeedback.type === 'success'
+        ? stylingMode ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-success)]'
+        : lastScanFeedback.type === 'alreadyAtLocation' ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-danger)]',
+    ].join(' ')}>
+      <div>
+        <div className="text-white font-semibold text-[var(--text-sm)]">{lastScanFeedback.message}</div>
+        <div className="text-white/80 text-[var(--text-xs)] font-mono">{lastScanFeedback.scannedValue}</div>
+      </div>
+    </div>
+  )
+
+  const pendingActions = (
+    <>
       {pendingAction?.type === 'wrongShoot' && (
-        <div style={{ background: '#FFF3E0', borderRadius: '10px', padding: '14px', marginBottom: '1rem', border: '1.5px solid #FF9800' }}>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: '#E65100', marginBottom: '8px' }}>
+        <Card className="border-[var(--color-warning)] bg-amber-50">
+          <p className="text-[var(--text-sm)] font-semibold text-[var(--color-warning)] mb-1">
             Item found in a different shoot: <em>{pendingAction.fromShootName}</em>
           </p>
-          <p style={{ fontSize: '12px', color: '#444', marginBottom: '10px' }}>
+          <p className="text-[var(--text-xs)] text-slate-600 mb-3">
             {pendingAction.item.styleNumber || pendingAction.item.qrCodeValue}
             {pendingAction.item.description ? ` — ${pendingAction.item.description}` : ''}
           </p>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => {
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="danger" size="sm" className="flex-1" onClick={() => {
               moveItemsToShoot([pendingAction.item.id], selectedShootId)
               doScanItem({ ...pendingAction.item }, selectedShootId)
               setPendingAction(null)
-            }} style={{ flex: 1, padding: '8px', background: '#E65100', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-              Move to {selectedShoot?.name ?? 'selected shoot'} + Scan In
-            </button>
-            <button onClick={() => {
+            }}>
+              Move to {selectedShoot?.name ?? 'shoot'} + Scan In
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => {
               doScanItem(pendingAction.item, pendingAction.fromShootId)
               setPendingAction(null)
-            }} style={{ padding: '8px 12px', background: '#F5F5F5', color: '#444', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+            }}>
               Keep in current shoot
-            </button>
-            <button onClick={() => setPendingAction(null)} style={{ padding: '8px 12px', background: '#F5F5F5', color: '#888', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-              Cancel
-            </button>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPendingAction(null)}>Cancel</Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Pending action: not found, confirm add */}
       {pendingAction?.type === 'confirmAdd' && (
-        <div style={{ background: '#FFEBEE', borderRadius: '10px', padding: '14px', marginBottom: '1rem', border: '1.5px solid #EF5350' }}>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: '#B71C1C', marginBottom: '6px' }}>
-            Item not found: <code style={{ fontFamily: 'monospace' }}>{pendingAction.barcode}</code>
+        <Card className="border-[var(--color-danger)] bg-red-50">
+          <p className="text-[var(--text-sm)] font-semibold text-[var(--color-danger)] mb-1">
+            Item not found: <code className="font-mono">{pendingAction.barcode}</code>
           </p>
-          <p style={{ fontSize: '12px', color: '#444', marginBottom: '10px' }}>
+          <p className="text-[var(--text-xs)] text-slate-600 mb-3">
             Add as a new item to <em>{selectedShoot?.name}</em>?
           </p>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => { doAddNewItem(pendingAction.barcode); setPendingAction(null) }}
-              style={{ flex: 1, padding: '8px', background: '#B71C1C', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+          <div className="flex gap-2">
+            <Button variant="danger" size="sm" className="flex-1" onClick={() => {
+              doAddNewItem(pendingAction.barcode)
+              setPendingAction(null)
+            }}>
               Add to {selectedShoot?.name ?? 'shoot'}
-            </button>
-            <button onClick={() => setPendingAction(null)}
-              style={{ padding: '8px 12px', background: '#F5F5F5', color: '#888', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-              Cancel
-            </button>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPendingAction(null)}>Cancel</Button>
           </div>
-        </div>
+        </Card>
       )}
+    </>
+  )
 
-      {/* Recent scans */}
-      <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #E0E0E0', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 14px', background: '#F5F5F5', fontSize: '12px', fontWeight: 600, color: '#666' }}>
+  const recentScansList = (maxVisible?: number) => {
+    const displayed = maxVisible ? recentScans.slice(0, maxVisible) : recentScans
+    return (
+      <Card padding="sm" className="overflow-hidden">
+        <div className="px-2 py-1.5 mb-1 text-[var(--text-xs)] font-semibold text-slate-500 uppercase tracking-wide">
           Recent scans this session
         </div>
         {recentScans.length === 0 ? (
-          <p style={{ padding: '14px', fontSize: '12px', color: '#888' }}>No scans yet.</p>
-        ) : recentScans.map((scan, i) => (
-          <div key={scan.key} style={{
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px',
-            background: i % 2 === 0 ? '#fff' : '#F9F9F9',
-          }}>
-            <span style={{ fontSize: '14px' }}>{LOCATION_ICON[scan.location]}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {scan.identifier}
-              </div>
-              {scan.description && (
-                <div style={{ fontSize: '10px', color: '#888' }}>{scan.description}</div>
-              )}
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: '10px', color: '#888', marginBottom: '2px' }}>
-                {locationLabel(scan.location)}
-              </div>
-              <div style={{ fontSize: '10px', color: '#aaa' }}>
-                {new Date(scan.time).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            <button onClick={() => handleUndo(scan)} style={{
-              padding: '4px 8px', background: '#F5F5F5', border: '1px solid #E0E0E0',
-              borderRadius: '5px', fontSize: '11px', color: '#666', cursor: 'pointer', flexShrink: 0,
-            }}>
-              Undo
-            </button>
+          <p className="px-2 py-3 text-[var(--text-xs)] text-slate-400">No scans yet.</p>
+        ) : (
+          <>
+            {displayed.map((scan, i) => {
+              const style = LOCATION_STYLE[scan.location]
+              return (
+                <div
+                  key={scan.key}
+                  className={`flex items-center gap-2 px-2 py-2 rounded-[var(--radius-sm)] ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.bg}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[var(--text-sm)] font-medium text-slate-900 truncate">{scan.identifier}</div>
+                    {scan.description && (
+                      <div className="text-[var(--text-xs)] text-slate-400 truncate">{scan.description}</div>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className={`text-[var(--text-xs)] ${style.text}`}>{locationLabel(scan.location)}</div>
+                    <div className="text-[var(--text-xs)] text-slate-400">
+                      {new Date(scan.time).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleUndo(scan)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] text-[var(--text-xs)] text-slate-500 hover:bg-slate-100 touch-target flex-shrink-0"
+                  >
+                    <ArrowCounterClockwise size={12} />
+                    Undo
+                  </button>
+                </div>
+              )
+            })}
+            {maxVisible && recentScans.length > maxVisible && (
+              <button
+                onClick={() => setShowAllScans(!showAllScans)}
+                className="w-full py-2 text-[var(--text-xs)] text-slate-400 hover:text-slate-600 underline underline-offset-2 text-center"
+              >
+                {showAllScans ? 'Show less' : `Show ${recentScans.length - maxVisible} more`}
+              </button>
+            )}
+          </>
+        )}
+      </Card>
+    )
+  }
+
+  const itemTable = (items: StockItem[], emptyMsg = 'No items at this location') => (
+    <div>
+      {/* Column headers */}
+      <div className="flex px-4 py-1.5 bg-slate-50 border-b border-[var(--color-border)] text-[var(--text-xs)] font-semibold text-slate-400 uppercase tracking-wide">
+        <span className="w-7">#</span>
+        <span className="w-32">Style</span>
+        <span className="flex-1">Description</span>
+        <span className="w-14 text-right">Look</span>
+      </div>
+      <div className="overflow-y-auto max-h-[50vh] lg:max-h-none">
+        {items.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[var(--text-sm)] text-slate-400">{emptyMsg}</div>
+        ) : items.map((item, i) => (
+          <div
+            key={item.id}
+            className={`flex items-center px-4 py-2 border-b border-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+          >
+            <span className="w-7 text-[var(--text-xs)] text-slate-300">{i + 1}</span>
+            <span className="w-32 text-[var(--text-sm)] font-semibold text-slate-900 truncate">{item.styleNumber}</span>
+            <span className="flex-1 text-[var(--text-xs)] text-slate-500 truncate">{item.description || '—'}</span>
+            <span className="w-14 text-right text-[var(--text-xs)] text-slate-400">
+              {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
+            </span>
           </div>
         ))}
+      </div>
+    </div>
+  )
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="lg:flex lg:h-full">
+
+      {/* ── Scan panel (left on desktop, full on phone/iPad) ── */}
+      <div className="lg:w-[500px] lg:flex-shrink-0 lg:overflow-y-auto p-4 lg:p-6 bg-[var(--color-surface-muted)] flex flex-col gap-4">
+
+        {/* PHONE: Sticky header */}
+        <div className="md:hidden sticky top-0 z-10 -mx-4 px-4 py-3 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center justify-between gap-3">
+          <span className="text-[var(--text-base)] font-semibold text-slate-900 truncate flex-1">
+            {selectedShoot?.name ?? 'No shoot selected'}
+          </span>
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-warning)]/10 text-[var(--color-warning)] text-[var(--text-xs)] font-semibold touch-target flex-shrink-0"
+          >
+            <Package size={14} />
+            {atClientCount} At Client
+          </button>
+        </div>
+
+        {/* TABLET+: Stats pills */}
+        <div className="hidden md:flex bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] overflow-hidden">
+          {statRows.map((pill, idx) => {
+            const style = LOCATION_STYLE[pill.loc]
+            const isActive = activeStatView === pill.loc
+            return (
+              <div key={pill.loc} className="flex flex-1">
+                {idx > 0 && <div className="w-px bg-[var(--color-border)]" />}
+                <button
+                  onClick={() => setActiveStatView(pill.loc)}
+                  className={`flex-1 text-center px-2 py-3 transition-colors ${isActive ? style.activeBg : 'bg-transparent hover:bg-slate-50'}`}
+                >
+                  <div className={`text-2xl font-bold tabular-nums ${style.text}`}>{pill.count}</div>
+                  <div className={`text-[var(--text-xs)] ${isActive ? style.text : 'text-slate-500'} ${isActive ? 'font-semibold' : ''}`}>
+                    {pill.label}
+                  </div>
+                  {isActive && <div className={`w-6 h-0.5 ${style.bg} mx-auto mt-1 rounded-full`} />}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* TABLET+: Controls + scan card */}
+        <Card className={`hidden md:block ${stylingMode ? 'border-amber-400' : ''}`}>
+          <p className="text-[var(--text-lg)] font-semibold text-slate-900 text-center mb-4">Scan In</p>
+          {settingsFields}
+
+          {/* Styling Mode */}
+          <div className="flex items-center gap-2 mt-3 mb-4">
+            <Button
+              variant="secondary" size="sm"
+              className={`flex-1 ${stylingMode ? 'border-amber-400 bg-amber-50 text-amber-700' : ''}`}
+              onClick={() => setStylingMode(!stylingMode)}
+            >
+              {stylingMode ? '✦ Styling Mode ON' : 'Enter Styling Mode'}
+            </Button>
+            {stylingMode && (
+              <Button variant="primary" size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => setStylingMode(false)}>
+                EXIT
+              </Button>
+            )}
+          </div>
+
+          <hr className="border-[var(--color-border)] mb-4" />
+          {scanField}
+        </Card>
+
+        {/* PHONE: Collapsible settings */}
+        <div className="md:hidden">
+          <button
+            onClick={() => setSettingsOpen(!settingsOpen)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] text-[var(--text-sm)] font-medium text-slate-700 touch-target"
+          >
+            <span className="flex items-center gap-2">
+              <Gear size={16} />
+              Settings
+            </span>
+            <span className="text-slate-400 text-[var(--text-xs)]">{settingsOpen ? '▲' : '▼'}</span>
+          </button>
+          {settingsOpen && (
+            <Card className="mt-2">
+              {settingsFields}
+              <div className="flex items-center gap-2 mt-3">
+                <Button
+                  variant="secondary" size="sm"
+                  className={`flex-1 ${stylingMode ? 'border-amber-400 bg-amber-50 text-amber-700' : ''}`}
+                  onClick={() => setStylingMode(!stylingMode)}
+                >
+                  {stylingMode ? '✦ Styling Mode ON' : 'Enter Styling Mode'}
+                </Button>
+                {stylingMode && (
+                  <Button variant="primary" size="sm" className="bg-amber-500" onClick={() => setStylingMode(false)}>
+                    EXIT
+                  </Button>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* PHONE: Scan card (always visible) */}
+        <Card className="md:hidden">
+          {scanField}
+        </Card>
+
+        {/* Feedback banner */}
+        {feedbackBanner}
+
+        {/* Pending actions */}
+        {pendingActions}
+
+        {/* Recent scans */}
+        <div className="md:hidden">
+          {recentScansList(showAllScans ? undefined : 3)}
+        </div>
+        <div className="hidden md:block">
+          {recentScansList()}
+        </div>
+      </div>
+
+      {/* ── Desktop: right reference panel ── */}
+      <div className="hidden lg:flex flex-col flex-1 border-l border-[var(--color-border)] bg-white min-w-0">
+        {/* Panel header */}
+        <div className="px-4 py-3 bg-slate-50 border-b border-[var(--color-border)] flex items-center gap-2 flex-shrink-0">
+          <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
+            {locationLabel(activeStatView)}
+          </span>
+          <span className={`${LOCATION_STYLE[activeStatView].bg} text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full`}>
+            {panelItems.length}
+          </span>
+          <span className="flex-1" />
+          <span className="text-[var(--text-xs)] text-slate-400">{selectedShoot?.name ?? 'No shoot selected'}</span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {itemTable(panelItems)}
+        </div>
+      </div>
+
+      {/* ── iPad portrait: reference list below scan panel ── */}
+      <div className="hidden md:block lg:hidden px-4 pb-4">
+        <Card padding="sm">
+          <div className="flex items-center gap-2 px-2 py-1.5 mb-1">
+            <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
+              {locationLabel(activeStatView)}
+            </span>
+            <span className={`${LOCATION_STYLE[activeStatView].bg} text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full`}>
+              {panelItems.length}
+            </span>
+            <span className="flex-1" />
+            <span className="text-[var(--text-xs)] text-slate-400">{selectedShoot?.name ?? ''}</span>
+          </div>
+          {itemTable(panelItems)}
+        </Card>
+      </div>
+
+      {/* ── Phone: At-Client bottom sheet ── */}
+      <div
+        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-200 md:hidden ${sheetOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setSheetOpen(false)}
+      />
+      <div
+        className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl h-[70vh] flex flex-col transition-transform duration-200 md:hidden ${sheetOpen ? 'translate-y-0' : 'translate-y-full'}`}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--text-base)] font-semibold text-slate-900">At Client</span>
+            <span className="bg-[var(--color-warning)] text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full">
+              {atClientCount}
+            </span>
+          </div>
+          <button
+            onClick={() => setSheetOpen(false)}
+            className="p-2 rounded-[var(--radius-md)] hover:bg-slate-100 touch-target"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {itemTable(atClientItems, 'No items at client yet')}
+        </div>
       </div>
 
       {showCamera && (
         <CameraScanner onScan={handleCameraScan} onClose={() => setShowCamera(false)} />
       )}
-
-      </div>{/* end left column */}
-
-      {/* ── Right: item panel ── */}
-      {(() => {
-        const pill = STAT_PILLS.find(p => p.loc === activeStatView) ?? STAT_PILLS[0]
-        return (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #E0E0E0', background: '#fff', minWidth: 0 }}>
-            {/* Panel header */}
-            <div style={{ padding: '12px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: pill.color }}>{pill.label}</span>
-              <span style={{ background: pill.color, color: '#fff', fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px' }}>
-                {panelItems.length}
-              </span>
-              <span style={{ flex: 1 }} />
-              <span style={{ fontSize: '11px', color: '#aaa' }}>{selectedShoot?.name ?? 'No shoot selected'}</span>
-            </div>
-
-            {/* Column headers */}
-            <div style={{ display: 'flex', padding: '6px 14px', background: '#FAFAFA', borderBottom: '1px solid #F0F0F0', fontSize: '10px', fontWeight: 600, color: '#999', flexShrink: 0 }}>
-              <span style={{ width: '28px' }}>#</span>
-              <span style={{ width: '130px' }}>Style</span>
-              <span style={{ flex: 1 }}>Description</span>
-              <span style={{ width: '60px', textAlign: 'right' }}>Look</span>
-            </div>
-
-            {/* Items */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {panelItems.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>
-                  No items at this location
-                </div>
-              ) : panelItems.map((item, i) => (
-                <div key={item.id} style={{
-                  display: 'flex', alignItems: 'center',
-                  padding: '7px 14px',
-                  background: i % 2 === 0 ? '#fff' : '#FAFAFA',
-                  borderBottom: '1px solid #F5F5F5',
-                }}>
-                  <span style={{ width: '28px', fontSize: '10px', color: '#bbb' }}>{i + 1}</span>
-                  <span style={{ width: '130px', fontSize: '12px', fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.styleNumber}
-                  </span>
-                  <span style={{ flex: 1, fontSize: '11px', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.description || '—'}
-                  </span>
-                  <span style={{ width: '60px', textAlign: 'right', fontSize: '10px', color: '#888' }}>
-                    {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
-
     </div>
   )
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StatPill({ value, label, color, isActive, onClick }: {
-  value: number; label: string; color: string; isActive?: boolean; onClick?: () => void
-}) {
-  return (
-    <div onClick={onClick} style={{
-      flex: 1, textAlign: 'center', padding: '10px 8px',
-      cursor: 'pointer',
-      background: isActive ? color + '12' : 'transparent',
-      transition: 'background 0.1s',
-    }}>
-      <div style={{ fontSize: '24px', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: '11px', color: isActive ? color : '#666', fontWeight: isActive ? 600 : 400 }}>{label}</div>
-      {isActive && <div style={{ width: '24px', height: '2px', background: color, margin: '3px auto 0', borderRadius: '1px' }} />}
-    </div>
-  )
-}
-
 function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-      <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', width: '60px', flexShrink: 0 }}>{label}</span>
-      <div style={{ flex: 1 }}>{children}</div>
+    <div className="flex items-center gap-3">
+      <span className="text-[var(--text-xs)] font-semibold text-slate-500 w-16 flex-shrink-0">{label}</span>
+      <div className="flex-1">{children}</div>
     </div>
   )
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const selectStyle: React.CSSProperties = {
-  width: '100%', padding: '6px 8px', fontSize: '13px', border: '1px solid #E0E0E0',
-  borderRadius: '6px', background: '#fff', color: '#111', cursor: 'pointer',
-}
-
-function inputStyle(hasValue: boolean): React.CSSProperties {
-  return {
-    width: '100%', padding: '6px 8px', fontSize: '13px',
-    border: `1px solid ${hasValue ? '#2E7D32' : '#E0E0E0'}`,
-    borderRadius: '6px', outline: 'none', boxSizing: 'border-box',
-  }
-}
-
-function lookNavBtn(active: boolean): React.CSSProperties {
-  return {
-    width: '28px', height: '28px', borderRadius: '5px', border: '1px solid #E0E0E0',
-    background: active ? '#F5F5F5' : '#FAFAFA', color: active ? '#7B1FA2' : '#ccc',
-    fontSize: '16px', cursor: active ? 'pointer' : 'default',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  }
-}
-
-const newLookBtn: React.CSSProperties = {
-  background: '#EDE9FE', color: '#7B1FA2', border: 'none',
-  padding: '5px 10px', borderRadius: '6px', fontSize: '11px',
-  cursor: 'pointer', fontWeight: 600,
 }
