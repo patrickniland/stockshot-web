@@ -142,9 +142,19 @@ export default function ScanInView() {
   }, [activeShootId])
 
   useEffect(() => {
+    setActiveStatView(scanInLocation)
+  }, [scanInLocation])
+
+  useEffect(() => {
     setLastScanFeedback(null)
     scanInputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (!lastScanFeedback) return
+    const t = setTimeout(() => setLastScanFeedback(null), 350)
+    return () => clearTimeout(t)
+  }, [lastScanFeedback])
 
   const selectedShoot = savedShoots.find(s => s.id === selectedShootId) ?? null
   const lookOrder = selectedShoot?.lookOrder ?? []
@@ -674,7 +684,7 @@ export default function ScanInView() {
     <div className="lg:flex lg:h-full">
 
       {/* ── Scan panel (left on desktop, full on phone/iPad) ── */}
-      <div className="lg:w-[500px] lg:flex-shrink-0 lg:flex lg:flex-col lg:overflow-hidden bg-[var(--color-surface-muted)]">
+      <div className="lg:w-[500px] lg:flex-shrink-0 lg:flex lg:flex-col bg-[var(--color-surface-muted)]">
 
         {/* TABLET+: Stats pills — pinned, never scrolls away */}
         <div className="hidden md:block flex-shrink-0 px-4 lg:px-6 pt-4 lg:pt-6 pb-4">
@@ -702,7 +712,7 @@ export default function ScanInView() {
         </div>
 
         {/* Scrollable body — pills stay pinned above this */}
-        <div className="flex-1 lg:overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 pt-4 md:pt-0 flex flex-col gap-4">
+        <div className="flex-1 min-h-0 lg:overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 pt-4 md:pt-0 flex flex-col gap-4">
 
         {/* PHONE: Sticky header */}
         <div className="md:hidden sticky top-0 z-10 -mx-4 px-4 py-3 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center justify-between gap-3">
