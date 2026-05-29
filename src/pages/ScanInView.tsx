@@ -202,11 +202,14 @@ export default function ScanInView() {
 
   function handleScan(barcode: string) {
     const raw = barcode.trim()
-    if (!raw || !canScan) return
+    if (!raw || !canScan || pendingAction) return
+
+    // Read directly from store to avoid stale React closure (rapid scanner fire)
+    const currentShoots = useAppStore.getState().savedShoots
 
     let foundItem: StockItem | null = null
     let foundShootId: string | null = null
-    for (const shoot of savedShoots) {
+    for (const shoot of currentShoots) {
       const match = shoot.items.find(i => matchesBarcode(i, raw))
       if (match) { foundItem = match; foundShootId = shoot.id; break }
     }
@@ -224,7 +227,7 @@ export default function ScanInView() {
     }
 
     if (foundShootId !== selectedShootId) {
-      const fromShoot = savedShoots.find(s => s.id === foundShootId)
+      const fromShoot = currentShoots.find(s => s.id === foundShootId)
       setFlashState('error')
       setTimeout(() => setFlashState(null), 350)
       try { navigator.vibrate([100, 50, 100]) } catch {}
