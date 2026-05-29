@@ -97,7 +97,9 @@ export default function ScanInView() {
   const [showCamera, setShowCamera] = useState(false)
   const [recentScans, setRecentScans] = useState<RecentScan[]>([])
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
-  const [activeStatView, setActiveStatView] = useState<CustodyLocation>('at_studio')
+  const [activeStatView, setActiveStatView] = useState<CustodyLocation>(
+    () => useAppStore.getState().scanInLocation
+  )
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [showAllScans, setShowAllScans] = useState(false)
@@ -276,6 +278,7 @@ export default function ScanInView() {
       scannedValue: item.styleNumber || item.qrCodeValue,
     })
 
+    setActiveStatView(scanInLocation)
     triggerSuccess()
   }
 
@@ -337,6 +340,7 @@ export default function ScanInView() {
       message: 'Added as new item',
       scannedValue: barcode,
     })
+    setActiveStatView(scanInLocation)
     triggerSuccess()
   }
 

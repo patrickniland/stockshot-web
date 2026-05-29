@@ -19,7 +19,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLook, setBulkLook] = useState<string>('')
   const [filterLook, setFilterLook] = useState<string>('all')
-  const [receivedOnly, setReceivedOnly] = useState(true)
+  type LocationFilter = 'all' | 'at_studio' | 'at_client' | 'in_transit'
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>(() =>
+    items.some(i => i.custodyLocation === 'at_studio') ? 'at_studio' : 'all'
+  )
   const [extraFieldFilter, setExtraFieldFilter] = useState<string>('')
   // ── Item filtering ─────────────────────────────────────────────────────────
 
@@ -37,7 +40,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const hasExtraFields = Object.keys(extraFieldOptions).length > 0
   const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
 
-  const receivedItems = receivedOnly ? items.filter(i => i.custodyLocation === 'at_studio') : items
+  const receivedItems = locationFilter === 'all' ? items : items.filter(i => i.custodyLocation === locationFilter)
   const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i =>
     filterLook === 'none' ? i.looks.length === 0 : i.looks.includes(parseInt(filterLook))
   )
@@ -164,19 +167,25 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           </button>
         </div>
 
-        {/* At Studio only toggle */}
-        <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => setReceivedOnly(!receivedOnly)} style={{
-            padding: '5px 10px', borderRadius: '5px', fontSize: '11px',
-            fontWeight: 600, cursor: 'pointer', border: 'none', flexShrink: 0,
-            background: receivedOnly ? '#E8F5E9' : '#F5F5F5',
-            color: receivedOnly ? '#2E7D32' : '#666',
-          }}>
-            {receivedOnly ? '🏠 At Studio only' : 'All items'}
-          </button>
-          <span style={{ fontSize: '11px', color: '#aaa' }}>
-            {receivedOnly ? `${items.filter(i => i.custodyLocation === 'at_studio').length} at studio` : `${items.length} total`}
-          </span>
+        {/* Location filter pills */}
+        <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
+          {([
+            { value: 'all',        label: 'All' },
+            { value: 'at_studio',  label: '🏠 At Studio' },
+            { value: 'at_client',  label: '📦 At Client' },
+            { value: 'in_transit', label: '🚚 In Transit' },
+          ] as const).map(opt => (
+            <button key={opt.value} onClick={() => setLocationFilter(opt.value)} style={{
+              padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
+              border: `1.5px solid ${locationFilter === opt.value ? '#1565C0' : '#E0E0E0'}`,
+              background: locationFilter === opt.value ? '#E3F2FD' : '#F9F9F9',
+              color: locationFilter === opt.value ? '#1565C0' : '#666',
+              cursor: 'pointer',
+            }}>
+              {opt.label}
+            </button>
+          ))}
         </div>
 
         {/* Look filter dropdown */}
@@ -291,6 +300,23 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
 
         {/* Item list */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtered.length === 0 && locationFilter !== 'all' && (
+            <div style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
+                {items.some(i => i.custodyLocation === locationFilter)
+                  ? 'No items here match the current filters.'
+                  : locationFilter === 'at_studio' ? 'No items have been scanned to studio yet.'
+                  : locationFilter === 'at_client' ? 'No items are currently at client.'
+                  : 'No items are currently in transit.'}
+              </div>
+              <button onClick={() => setLocationFilter('all')} style={{
+                padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', cursor: 'pointer',
+              }}>
+                Show all items
+              </button>
+            </div>
+          )}
           {filtered.map((item, i) => (
             <div key={item.id} style={{
               display: 'flex', alignItems: 'center', gap: '10px',

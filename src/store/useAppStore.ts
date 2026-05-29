@@ -369,12 +369,17 @@ const useAppStore = create<AppStore>()(
         const { savedShoots, activeShootId, orgId } = get()
         const sh = savedShoots.find(x => x.id === activeShootId)
         if (!sh || !activeShootId) return
+        // Ensure both look numbers are tracked before swapping — a look may exist
+        // only in items (added via direct assignment) and be absent from lookOrder
+        let baseOrder = sh.lookOrder
+        if (!baseOrder.includes(lookA)) baseOrder = [...baseOrder, lookA].sort((a, b) => a - b)
+        if (!baseOrder.includes(lookB)) baseOrder = [...baseOrder, lookB].sort((a, b) => a - b)
         const swap = (n: number) => n === lookA ? lookB : n === lookB ? lookA : n
         const items = sh.items.map(item => ({
           ...item,
           looks: item.looks.map(swap).sort((a, b) => a - b),
         }))
-        const lookOrder = sh.lookOrder.map(swap).sort((a, b) => a - b)
+        const lookOrder = baseOrder.map(swap).sort((a, b) => a - b)
         const updatedShoot = { ...sh, items, lookOrder, updatedAt: new Date().toISOString() }
         set({
           savedShoots: savedShoots.map(x => x.id === activeShootId ? updatedShoot : x),
@@ -579,6 +584,14 @@ const useAppStore = create<AppStore>()(
       addItemToShoot: (item, shootId) => {
         const { savedShoots, orgId } = get()
         if (!orgId) return
+        // Bail if the target shoot already has an item with the same barcode
+        const targetShoot = savedShoots.find(s => s.id === shootId)
+        const alreadyExists = targetShoot?.items.some(i =>
+          (item.sku       && i.sku       === item.sku)       ||
+          (item.qrCodeValue && i.qrCodeValue === item.qrCodeValue) ||
+          (item.styleNumber && i.styleNumber === item.styleNumber)
+        )
+        if (alreadyExists) return
         set({
           savedShoots: savedShoots.map(shoot =>
             shoot.id === shootId
