@@ -674,7 +674,35 @@ export default function ScanInView() {
     <div className="lg:flex lg:h-full">
 
       {/* ── Scan panel (left on desktop, full on phone/iPad) ── */}
-      <div className="lg:w-[500px] lg:flex-shrink-0 lg:overflow-y-auto p-4 lg:p-6 bg-[var(--color-surface-muted)] flex flex-col gap-4">
+      <div className="lg:w-[500px] lg:flex-shrink-0 lg:flex lg:flex-col lg:overflow-hidden bg-[var(--color-surface-muted)]">
+
+        {/* TABLET+: Stats pills — pinned, never scrolls away */}
+        <div className="hidden md:block flex-shrink-0 px-4 lg:px-6 pt-4 lg:pt-6 pb-4">
+          <div className="flex bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] overflow-hidden">
+            {statRows.map((pill, idx) => {
+              const style = LOCATION_STYLE[pill.loc]
+              const isActive = activeStatView === pill.loc
+              return (
+                <div key={pill.loc} className="flex flex-1">
+                  {idx > 0 && <div className="w-px bg-[var(--color-border)]" />}
+                  <button
+                    onClick={() => setActiveStatView(pill.loc)}
+                    className={`flex-1 text-center px-2 py-3 transition-colors ${isActive ? style.activeBg : 'bg-transparent hover:bg-slate-50'}`}
+                  >
+                    <div className={`text-2xl font-bold tabular-nums ${style.text}`}>{pill.count}</div>
+                    <div className={`text-[var(--text-xs)] ${isActive ? style.text : 'text-slate-500'} ${isActive ? 'font-semibold' : ''}`}>
+                      {pill.label}
+                    </div>
+                    {isActive && <div className={`w-6 h-0.5 ${style.bg} mx-auto mt-1 rounded-full`} />}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Scrollable body — pills stay pinned above this */}
+        <div className="flex-1 lg:overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 pt-4 md:pt-0 flex flex-col gap-4">
 
         {/* PHONE: Sticky header */}
         <div className="md:hidden sticky top-0 z-10 -mx-4 px-4 py-3 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center justify-between gap-3">
@@ -688,29 +716,6 @@ export default function ScanInView() {
             <Package size={14} />
             {atClientCount} At Client
           </button>
-        </div>
-
-        {/* TABLET+: Stats pills */}
-        <div className="hidden md:flex bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] overflow-hidden">
-          {statRows.map((pill, idx) => {
-            const style = LOCATION_STYLE[pill.loc]
-            const isActive = activeStatView === pill.loc
-            return (
-              <div key={pill.loc} className="flex flex-1">
-                {idx > 0 && <div className="w-px bg-[var(--color-border)]" />}
-                <button
-                  onClick={() => setActiveStatView(pill.loc)}
-                  className={`flex-1 text-center px-2 py-3 transition-colors ${isActive ? style.activeBg : 'bg-transparent hover:bg-slate-50'}`}
-                >
-                  <div className={`text-2xl font-bold tabular-nums ${style.text}`}>{pill.count}</div>
-                  <div className={`text-[var(--text-xs)] ${isActive ? style.text : 'text-slate-500'} ${isActive ? 'font-semibold' : ''}`}>
-                    {pill.label}
-                  </div>
-                  {isActive && <div className={`w-6 h-0.5 ${style.bg} mx-auto mt-1 rounded-full`} />}
-                </button>
-              </div>
-            )
-          })}
         </div>
 
         {/* TABLET+: Controls + scan card */}
@@ -784,6 +789,8 @@ export default function ScanInView() {
         <div className="hidden md:block">
           {recentScansList()}
         </div>
+
+        </div>{/* end scrollable body */}
       </div>
 
       {/* ── Desktop: right reference panel ── */}
