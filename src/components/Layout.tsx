@@ -1,20 +1,37 @@
-// StockShot — Layout with Sidebar Navigation
-
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import {
+  DownloadSimple,
+  FolderOpen,
+  Barcode,
+  ClipboardText,
+  FilmSlate,
+  Package,
+  Warning,
+  ChartBar,
+  SlidersHorizontal,
+  SignOut,
+  User,
+} from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { Session } from '@supabase/supabase-js'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 
 const NAV = [
-  { to: '/import',    icon: '⬇', label: 'Import Stock' },
-  { to: '/jobs',      icon: '📁', label: 'Shoots' },
-  { to: '/scan-in',   icon: '📷', label: 'Scan In' },
-  { to: '/stock',     icon: '📋', label: 'Stock List' },
-  { to: '/shot-list', icon: '🎬', label: 'Shot List' },
-  { to: '/scan-out',  icon: '📦', label: 'Scan Out' },
-  { to: '/pending',   icon: '⚠', label: 'Missing' },
-  { to: '/dashboard', icon: '📊', label: 'Dashboard' },
-  { to: '/admin',     icon: '⚙', label: 'Admin' },
+  { to: '/import',    Icon: DownloadSimple,     label: 'Import Stock' },
+  { to: '/jobs',      Icon: FolderOpen,          label: 'Shoots' },
+  { to: '/scan-in',   Icon: Barcode,             label: 'Scan In' },
+  { to: '/stock',     Icon: ClipboardText,       label: 'Stock List' },
+  { to: '/shot-list', Icon: FilmSlate,           label: 'Shot List' },
+  { to: '/scan-out',  Icon: Package,             label: 'Scan Out' },
+  { to: '/pending',   Icon: Warning,             label: 'Missing' },
+  { to: '/dashboard', Icon: ChartBar,            label: 'Dashboard' },
+  { to: '/admin',     Icon: SlidersHorizontal,   label: 'Admin' },
+]
+
+const PHONE_TABS = [
+  { to: '/scan-in',  Icon: Barcode,      label: 'Scan In' },
+  { to: '/scan-out', Icon: Package,      label: 'Scan Out' },
 ]
 
 function formatAgo(ts: string | null): string {
@@ -31,32 +48,36 @@ function SyncIndicator() {
   const lastSyncedAt = useAppStore(s => s.lastSyncedAt)
   const [, tick] = useState(0)
 
-  // Refresh "X ago" display every 30s
   useEffect(() => {
     const id = setInterval(() => tick(n => n + 1), 30_000)
     return () => clearInterval(id)
   }, [])
 
   let text = ''
-  let color = '#555'
+  let dotClass = 'bg-slate-500'
+  let textClass = 'text-slate-500'
 
   if (syncStatus === 'syncing') {
     text = 'Syncing…'
-    color = '#7BB8F0'
+    dotClass = 'bg-blue-400'
+    textClass = 'text-blue-400'
   } else if (syncStatus === 'error') {
     text = 'Sync failed — retrying'
-    color = '#ff6b6b'
+    dotClass = 'bg-[var(--color-danger)]'
+    textClass = 'text-[var(--color-danger)]'
   } else if (lastSyncedAt) {
     text = `Synced ${formatAgo(lastSyncedAt)}`
-    color = '#555'
   }
 
   if (!text) return null
 
   return (
-    <div style={{ padding: '4px 12px 8px', fontSize: '10px', color, textAlign: 'center' }}>
-      {text}
-    </div>
+    <>
+      <div className={`block lg:hidden w-2 h-2 rounded-full mx-auto mb-2 ${dotClass}`} />
+      <div className={`hidden lg:block px-3 pb-2 text-[10px] text-center ${textClass}`}>
+        {text}
+      </div>
+    </>
   )
 }
 
@@ -85,6 +106,7 @@ export default function Layout({ children, session, onSignOut }: {
   onSignOut?: () => void
 }) {
   useAdminSessionWatchdog()
+
   const getActiveShoot = useAppStore(s => s.getActiveShoot)
   const getStudioQueue = useAppStore(s => s.getStudioQueue)
   const getPending = useAppStore(s => s.getPending)
@@ -96,38 +118,43 @@ export default function Layout({ children, session, onSignOut }: {
   const pendingCount = getPending().length
   const meaningful = pendingIsMeaningful()
 
+  const isPhone = useMediaQuery('(max-width: 767px)')
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (isPhone && location.pathname !== '/scan-in' && location.pathname !== '/scan-out') {
+      navigate('/scan-in', { replace: true })
+    }
+  }, [isPhone, location.pathname, navigate])
+
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Sidebar */}
-      <div style={{
-        width: '210px',
-        flexShrink: 0,
-        background: '#1C1C1E',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-      }}>
+    <div className="flex h-screen overflow-hidden">
+
+      {/* Sidebar — hidden on phone, icon rail on iPad, full labels on desktop */}
+      <aside className="hidden md:flex flex-col flex-shrink-0 w-16 lg:w-[210px] bg-[var(--color-brand)] h-screen">
+
         {/* Brand */}
-        <div style={{ padding: '18px 16px 14px', borderBottom: '0.5px solid #333' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', width: '30px', height: '30px', flexShrink: 0 }}>
-              <div style={{ flex: 1, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#fff', fontSize: '11px', fontWeight: 700 }}>E</span>
+        <div className="px-3 lg:px-4 py-4 lg:py-[18px] border-b border-white/10">
+          <div className="flex justify-center lg:justify-start items-center gap-[10px] lg:mb-2">
+            <div className="flex w-[30px] h-[30px] flex-shrink-0">
+              <div className="flex-1 bg-black flex items-center justify-center">
+                <span className="text-white text-[11px] font-bold">E</span>
               </div>
-              <div style={{ flex: 1, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#000', fontSize: '11px', fontWeight: 700 }}>R</span>
+              <div className="flex-1 bg-white flex items-center justify-center">
+                <span className="text-black text-[11px] font-bold">R</span>
               </div>
             </div>
-            <span style={{ color: '#fff', fontSize: '17px', fontWeight: 700 }}>StockShot</span>
+            <span className="hidden lg:block text-white text-[17px] font-bold">StockShot</span>
           </div>
-          <div style={{ color: '#555', fontSize: '9px', letterSpacing: '1.2px', fontWeight: 500 }}>
+          <div className="hidden lg:block text-slate-500 text-[9px] tracking-[1.2px] font-medium">
             BY ENHANCE RETAIL
           </div>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
-          {NAV.map(({ to, icon, label }) => {
+        <nav className="flex-1 py-2 overflow-y-auto">
+          {NAV.map(({ to, Icon, label }) => {
             const badge =
               label === 'Shot List' && studioQueueCount > 0 ? studioQueueCount :
               label === 'Missing' && meaningful && pendingCount > 0 ? pendingCount :
@@ -139,36 +166,32 @@ export default function Layout({ children, session, onSignOut }: {
                 key={to}
                 to={to}
                 end={to !== '/admin'}
-                style={({ isActive }) => ({
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '8px 12px',
-                  margin: '1px 8px',
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  fontSize: '13px',
-                  background: isActive ? '#fff' : 'transparent',
-                  color: isActive ? '#1C1C1E' : '#aaa',
-                  fontWeight: isActive ? 600 : 400,
-                  transition: 'background 0.15s',
-                })}
+                title={label}
+                className={({ isActive }) =>
+                  [
+                    'flex items-center justify-center lg:justify-start gap-[10px]',
+                    'py-2 px-2 lg:px-3 mx-1 lg:mx-2 my-0.5',
+                    'rounded-[var(--radius-md)] no-underline text-[var(--text-sm)] transition-colors',
+                    isActive
+                      ? 'bg-white text-[var(--color-brand)] font-semibold'
+                      : 'text-slate-400 hover:text-white hover:bg-white/10',
+                  ].join(' ')
+                }
               >
-                <span style={{ fontSize: '14px', width: '18px', textAlign: 'center' }}>{icon}</span>
-                <span style={{ flex: 1 }}>{label}</span>
-                {badge !== null && (
-                  <span style={{
-                    background: label === 'Shot List' ? '#7B1FA2' : '#E65100',
-                    color: '#fff',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    padding: '1px 6px',
-                    borderRadius: '99px',
-                    minWidth: '18px',
-                    textAlign: 'center',
-                  }}>
-                    {badge}
-                  </span>
+                {({ isActive }) => (
+                  <>
+                    <Icon size={20} weight={isActive ? 'fill' : 'bold'} className="flex-shrink-0" />
+                    <span className="hidden lg:block flex-1">{label}</span>
+                    {badge !== null && (
+                      <span className={[
+                        'hidden lg:flex items-center justify-center',
+                        'text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px]',
+                        label === 'Shot List' ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-warning)]',
+                      ].join(' ')}>
+                        {badge}
+                      </span>
+                    )}
+                  </>
                 )}
               </NavLink>
             )
@@ -180,44 +203,76 @@ export default function Layout({ children, session, onSignOut }: {
 
         {/* Active shoot strip */}
         {activeShoot && (
-          <NavLink to="/jobs" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '10px 12px',
-            background: '#E3F2FD22',
-            borderTop: '0.5px solid #333',
-            textDecoration: 'none',
-          }}>
-            <span style={{ fontSize: '10px' }}>📁</span>
-            <span style={{ fontSize: '11px', color: '#aaa', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <NavLink
+            to="/jobs"
+            title={activeShoot.name}
+            className="flex items-center justify-center lg:justify-start gap-[6px] px-2 lg:px-3 py-2.5 bg-blue-50/5 border-t border-white/10 no-underline"
+          >
+            <FolderOpen size={14} className="flex-shrink-0 text-slate-400" />
+            <span className="hidden lg:block text-[11px] text-slate-400 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
               {activeShoot.name}
             </span>
-            <span style={{ fontSize: '10px', color: '#555' }}>›</span>
+            <span className="hidden lg:block text-[10px] text-slate-600">›</span>
           </NavLink>
         )}
 
         {/* User strip */}
         {session && (
-          <div style={{ padding: '8px 12px', borderTop: '0.5px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {session.user.user_metadata?.avatar_url && (
-              <img src={session.user.user_metadata.avatar_url} style={{ width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0 }} alt="" />
+          <div className="flex items-center justify-center lg:justify-start gap-2 px-2 lg:px-3 py-2 border-t border-white/10">
+            {session.user.user_metadata?.avatar_url ? (
+              <img
+                src={session.user.user_metadata.avatar_url}
+                className="w-[22px] h-[22px] rounded-full flex-shrink-0"
+                alt=""
+              />
+            ) : (
+              <User size={18} className="text-slate-400 flex-shrink-0" />
             )}
-            <span style={{ fontSize: '10px', color: '#666', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span className="hidden lg:block text-[10px] text-slate-500 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
               {session.user.user_metadata?.full_name || session.user.email}
             </span>
-            <button onClick={onSignOut} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '12px', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}
-              title="Sign out">
-              ↪
+            <button
+              onClick={onSignOut}
+              title="Sign out"
+              className="text-slate-500 hover:text-white bg-transparent border-none p-1 rounded cursor-pointer flex-shrink-0"
+            >
+              <SignOut size={14} />
             </button>
           </div>
         )}
-      </div>
+      </aside>
 
       {/* Main content */}
-      <div style={{ flex: 1, overflowY: 'auto', background: '#F5F5F5' }}>
+      <main className="flex-1 overflow-y-auto bg-[var(--color-surface-muted)] pb-20 md:pb-0">
         {children}
-      </div>
+      </main>
+
+      {/* Bottom tab bar — phone only */}
+      <nav className="flex md:hidden fixed inset-x-0 bottom-0 pb-safe border-t border-[var(--color-border)] bg-white z-50">
+        {PHONE_TABS.map(({ to, Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              [
+                'flex-1 flex flex-col items-center justify-center gap-1 py-3',
+                'touch-target no-underline text-[var(--text-xs)]',
+                isActive
+                  ? 'text-[var(--color-brand)] bg-slate-50'
+                  : 'text-slate-500',
+              ].join(' ')
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <Icon size={24} weight={isActive ? 'fill' : 'bold'} />
+                <span>{label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
     </div>
   )
 }

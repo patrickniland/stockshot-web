@@ -134,9 +134,9 @@ export async function updateItemCustody(
   const payload: Record<string, unknown> = {
     custody_location: updates.custodyLocation,
     custody_history: updates.custodyHistory,
+    last_scanned_at: updates.lastScannedAt ?? null,
+    last_scanned_by: updates.lastScannedBy ?? null,
   }
-  if (updates.lastScannedAt) payload.last_scanned_at = updates.lastScannedAt
-  if (updates.lastScannedBy) payload.last_scanned_by = updates.lastScannedBy
   const { error } = await supabase.from('stock_items').update(payload).eq('id', itemId)
   if (error) throw error
 }
@@ -155,6 +155,11 @@ export async function updateItemStatus(
   if (updates.requiredAngles !== undefined) dbUpdates.required_angles = updates.requiredAngles
 
   const { error } = await supabase.from('stock_items').update(dbUpdates).eq('id', itemId)
+  if (error) throw error
+}
+
+export async function deleteItem(itemId: string): Promise<void> {
+  const { error } = await supabase.from('stock_items').delete().eq('id', itemId)
   if (error) throw error
 }
 

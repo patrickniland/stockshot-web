@@ -7,7 +7,7 @@ import {
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient, deleteItem } from '../lib/db'
 import { supabase } from '../lib/supabase'
 
 interface AppStore {
@@ -83,6 +83,7 @@ interface AppStore {
   bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string, notes?: string) => void
   moveItemsToShoot: (itemIds: string[], targetShootId: string) => void
   addItemToShoot: (item: StockItem, shootId: string) => void
+  removeItemFromShoot: (itemId: string, shootId: string) => void
   restoreItemState: (itemId: string, updates: Partial<StockItem>) => void
 
   scanIn: (sku: string) => void
@@ -369,12 +370,17 @@ const useAppStore = create<AppStore>()(
         const { savedShoots, activeShootId, orgId } = get()
         const sh = savedShoots.find(x => x.id === activeShootId)
         if (!sh || !activeShootId) return
+        // Ensure both look numbers are tracked before swapping — a look may exist
+        // only in items (added via direct assignment) and be absent from lookOrder
+        let baseOrder = sh.lookOrder
+        if (!baseOrder.includes(lookA)) baseOrder = [...baseOrder, lookA].sort((a, b) => a - b)
+        if (!baseOrder.includes(lookB)) baseOrder = [...baseOrder, lookB].sort((a, b) => a - b)
         const swap = (n: number) => n === lookA ? lookB : n === lookB ? lookA : n
         const items = sh.items.map(item => ({
           ...item,
           looks: item.looks.map(swap).sort((a, b) => a - b),
         }))
-        const lookOrder = sh.lookOrder.map(swap).sort((a, b) => a - b)
+        const lookOrder = baseOrder.map(swap).sort((a, b) => a - b)
         const updatedShoot = { ...sh, items, lookOrder, updatedAt: new Date().toISOString() }
         set({
           savedShoots: savedShoots.map(x => x.id === activeShootId ? updatedShoot : x),
@@ -579,6 +585,14 @@ const useAppStore = create<AppStore>()(
       addItemToShoot: (item, shootId) => {
         const { savedShoots, orgId } = get()
         if (!orgId) return
+        // Bail if the target shoot already has an item with the same barcode
+        const targetShoot = savedShoots.find(s => s.id === shootId)
+        const alreadyExists = targetShoot?.items.some(i =>
+          (item.sku       && i.sku       === item.sku)       ||
+          (item.qrCodeValue && i.qrCodeValue === item.qrCodeValue) ||
+          (item.styleNumber && i.styleNumber === item.styleNumber)
+        )
+        if (alreadyExists) return
         set({
           savedShoots: savedShoots.map(shoot =>
             shoot.id === shootId
@@ -588,6 +602,20 @@ const useAppStore = create<AppStore>()(
         })
         upsertItem(item, shootId, orgId)
           .catch(e => console.error('[Sync] addItemToShoot error:', e))
+      },
+
+      removeItemFromShoot: (itemId, shootId) => {
+        const { orgId } = get()
+        set(s => ({
+          savedShoots: s.savedShoots.map(sh =>
+            sh.id === shootId
+              ? { ...sh, items: sh.items.filter(i => i.id !== itemId) }
+              : sh
+          ),
+        }))
+        if (orgId) {
+          deleteItem(itemId).catch(e => console.error('[Sync] removeItemFromShoot error:', e))
+        }
       },
 
       restoreItemState: (itemId, updates) => {
@@ -784,21 +812,36 @@ const useAppStore = create<AppStore>()(
       setSyncStatus: (status) => set({ syncStatus: status }),
       setLastSyncedAt: (ts) => set({ lastSyncedAt: ts }),
       setLastPulledAt: (ts) => set({ lastPulledAt: ts }),
-      mergeItems: (updates) => set(s => ({
-        savedShoots: s.savedShoots.map(shoot => {
-          const shootUpdates = updates.filter(u => u.shootId === shoot.id)
-          if (!shootUpdates.length) return shoot
-          const existingIds = new Set(shoot.items.map(i => i.id))
-          const updatedItems = shoot.items.map(item => {
-            const found = shootUpdates.find(u => u.item.id === item.id)
-            return found ? { ...item, ...found.item } : item
-          })
-          const newItems = shootUpdates
-            .filter(u => !existingIds.has(u.item.id))
-            .map(u => u.item)
-          return { ...shoot, items: [...updatedItems, ...newItems] }
-        }),
-      })),
+      mergeItems: (updates) => set(s => {
+        // Build a map of itemId → its authoritative shoot per DB
+        const itemShootMap = new Map(updates.map(u => [u.item.id, u.shootId]))
+
+        return {
+          savedShoots: s.savedShoots.map(shoot => {
+            const shootUpdates = updates.filter(u => u.shootId === shoot.id)
+
+            // Remove stale copies of items that DB says now belong to a different shoot
+            const baseItems = shoot.items.filter(i => {
+              const correctShoot = itemShootMap.get(i.id)
+              return correctShoot === undefined || correctShoot === shoot.id
+            })
+
+            if (!shootUpdates.length) {
+              return baseItems.length === shoot.items.length ? shoot : { ...shoot, items: baseItems }
+            }
+
+            const existingIds = new Set(baseItems.map(i => i.id))
+            const updatedItems = baseItems.map(item => {
+              const found = shootUpdates.find(u => u.item.id === item.id)
+              return found ? { ...item, ...found.item } : item
+            })
+            const newItems = shootUpdates
+              .filter(u => !existingIds.has(u.item.id))
+              .map(u => u.item)
+            return { ...shoot, items: [...updatedItems, ...newItems] }
+          }),
+        }
+      }),
 
       mergeShoots: (updates, newShootsWithItems) => set(s => {
         const existingIds = new Set(s.savedShoots.map(sh => sh.id))

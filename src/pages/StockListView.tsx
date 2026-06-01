@@ -39,6 +39,7 @@ export default function StockListView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [bulkProductType, setBulkProductType] = useState('')
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
   // Bulk mark-at-studio
   const [showMarkStudio, setShowMarkStudio] = useState(false)
@@ -57,6 +58,8 @@ export default function StockListView() {
   const currentOperator = useAppStore(s => s.currentOperator)
   const bulkSetCustody = useAppStore(s => s.bulkSetCustody)
   const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
+  const restoreItemState = useAppStore(s => s.restoreItemState)
+  const removeItemFromShoot = useAppStore(s => s.removeItemFromShoot)
 
   const activeShoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const allItems = activeShoot?.items ?? []
@@ -358,44 +361,101 @@ export default function StockListView() {
 
             {/* Expanded panel */}
             {expandedId === item.id && (
-              <div style={{ padding: '12px 16px 16px 60px', background: '#F8F8F8', borderBottom: '1px solid #F0F0F0', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                {/* QR Code */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  <QRCode value={item.qrCodeValue} size={80} />
-                  <div style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.qrCodeValue}
+              <div style={{ padding: '12px 16px 16px 60px', background: '#F8F8F8', borderBottom: '1px solid #F0F0F0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+                {/* Row 1: QR + custody history */}
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <QRCode value={item.qrCodeValue} size={80} />
+                    <div style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.qrCodeValue}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#666', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Custody History
+                    </div>
+                    {item.custodyHistory.length === 0 ? (
+                      <p style={{ fontSize: '11px', color: '#aaa' }}>No custody events recorded.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {item.custodyHistory.map((event, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11px' }}>
+                            <span style={{ color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {new Date(event.timestamp).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
+                              {' '}
+                              {new Date(event.timestamp).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span style={{ color: CUSTODY_COLOR[event.location] ?? '#444', fontWeight: 600 }}>
+                              {CUSTODY_ICON[event.location]} {CUSTODY_LABEL[event.location]}
+                            </span>
+                            {event.notes && <span style={{ color: '#888' }}>— {event.notes}</span>}
+                            {event.operator && <span style={{ color: '#aaa' }}>({event.operator})</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {item.notes && (
+                      <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>{item.notes}</div>
+                    )}
                   </div>
                 </div>
 
-                {/* Custody history */}
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#666', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Custody History
+                {/* Row 2: Release actions — only when item is at client */}
+                {item.custodyLocation === 'at_client' && activeShootId && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px', borderTop: '1px solid #E8E8E8', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', flexShrink: 0 }}>
+                      Release:
+                    </span>
+                    <button
+                      onClick={() => {
+                        restoreItemState(item.id, {
+                          custodyLocation: 'at_client',
+                          custodyHistory: [],
+                          lastScannedAt: null,
+                          lastScannedBy: null,
+                        })
+                        setExpandedId(null)
+                      }}
+                      style={{
+                        padding: '5px 12px', background: '#FFF8E1', border: '1px solid #FFE082',
+                        borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#F57F17',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ↩ Reset to pending
+                    </button>
+                    {confirmRemoveId === item.id ? (
+                      <>
+                        <span style={{ fontSize: '11px', color: '#666' }}>Sure?</span>
+                        <button
+                          onClick={() => { removeItemFromShoot(item.id, activeShootId); setConfirmRemoveId(null); setExpandedId(null) }}
+                          style={{ padding: '5px 12px', background: '#C62828', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          Yes, remove
+                        </button>
+                        <button
+                          onClick={() => setConfirmRemoveId(null)}
+                          style={{ padding: '5px 8px', background: 'none', border: 'none', fontSize: '12px', color: '#888', cursor: 'pointer' }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmRemoveId(item.id)}
+                        style={{
+                          padding: '5px 12px', background: '#FFEBEE', border: '1px solid #FFCDD2',
+                          borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#C62828',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🗑 Remove from shoot
+                      </button>
+                    )}
                   </div>
-                  {item.custodyHistory.length === 0 ? (
-                    <p style={{ fontSize: '11px', color: '#aaa' }}>No custody events recorded.</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {item.custodyHistory.map((event, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11px' }}>
-                          <span style={{ color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {new Date(event.timestamp).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}
-                            {' '}
-                            {new Date(event.timestamp).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <span style={{ color: CUSTODY_COLOR[event.location] ?? '#444', fontWeight: 600 }}>
-                            {CUSTODY_ICON[event.location]} {CUSTODY_LABEL[event.location]}
-                          </span>
-                          {event.notes && <span style={{ color: '#888' }}>— {event.notes}</span>}
-                          {event.operator && <span style={{ color: '#aaa' }}>({event.operator})</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {item.notes && (
-                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>{item.notes}</div>
-                  )}
-                </div>
+                )}
               </div>
             )}
           </div>

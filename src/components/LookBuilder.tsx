@@ -19,7 +19,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLook, setBulkLook] = useState<string>('')
   const [filterLook, setFilterLook] = useState<string>('all')
-  const [receivedOnly, setReceivedOnly] = useState(true)
+  type LocationFilter = 'all' | 'at_studio' | 'at_client' | 'in_transit'
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>(() =>
+    items.some(i => i.custodyLocation === 'at_studio') ? 'at_studio' : 'all'
+  )
   const [extraFieldFilter, setExtraFieldFilter] = useState<string>('')
   // ── Item filtering ─────────────────────────────────────────────────────────
 
@@ -35,9 +38,9 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
     return map
   })()
   const hasExtraFields = Object.keys(extraFieldOptions).length > 0
-  const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
+  const [bulkAction, setBulkAction] = useState<'add' | 'move' | 'remove'>('add')
 
-  const receivedItems = receivedOnly ? items.filter(i => i.custodyLocation === 'at_studio') : items
+  const receivedItems = locationFilter === 'all' ? items : items.filter(i => i.custodyLocation === locationFilter)
   const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i =>
     filterLook === 'none' ? i.looks.length === 0 : i.looks.includes(parseInt(filterLook))
   )
@@ -79,7 +82,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   }
 
   function removeLookFromItem(item: StockItem, look: number) {
-    if (item.looks.length <= 1) return
     onUpdateItem(item.id, item.looks.filter(l => l !== look))
   }
 
@@ -103,8 +105,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           ? item.looks
           : [...item.looks, look].sort((a, b) => a - b)
         return { ...item, looks: newLooks }
-      } else {
+      } else if (bulkAction === 'move') {
         return { ...item, looks: [look] }
+      } else {
+        return { ...item, looks: item.looks.filter(l => l !== look) }
       }
     })
     updatedItems.forEach(item => {
@@ -164,19 +168,25 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           </button>
         </div>
 
-        {/* At Studio only toggle */}
-        <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => setReceivedOnly(!receivedOnly)} style={{
-            padding: '5px 10px', borderRadius: '5px', fontSize: '11px',
-            fontWeight: 600, cursor: 'pointer', border: 'none', flexShrink: 0,
-            background: receivedOnly ? '#E8F5E9' : '#F5F5F5',
-            color: receivedOnly ? '#2E7D32' : '#666',
-          }}>
-            {receivedOnly ? '🏠 At Studio only' : 'All items'}
-          </button>
-          <span style={{ fontSize: '11px', color: '#aaa' }}>
-            {receivedOnly ? `${items.filter(i => i.custodyLocation === 'at_studio').length} at studio` : `${items.length} total`}
-          </span>
+        {/* Location filter pills */}
+        <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
+          {([
+            { value: 'all',        label: 'All' },
+            { value: 'at_studio',  label: '🏠 At Studio' },
+            { value: 'at_client',  label: '📦 At Client' },
+            { value: 'in_transit', label: '🚚 In Transit' },
+          ] as const).map(opt => (
+            <button key={opt.value} onClick={() => setLocationFilter(opt.value)} style={{
+              padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
+              border: `1.5px solid ${locationFilter === opt.value ? '#1565C0' : '#E0E0E0'}`,
+              background: locationFilter === opt.value ? '#E3F2FD' : '#F9F9F9',
+              color: locationFilter === opt.value ? '#1565C0' : '#666',
+              cursor: 'pointer',
+            }}>
+              {opt.label}
+            </button>
+          ))}
         </div>
 
         {/* Look filter dropdown */}
@@ -208,14 +218,14 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               {selectedIds.size} selected
             </span>
             <div style={{ display: 'flex', gap: '6px' }}>
-              {(['add', 'move'] as const).map(a => (
+              {(['add', 'move', 'remove'] as const).map(a => (
                 <button key={a} onClick={() => setBulkAction(a)} style={{
                   padding: '4px 10px', borderRadius: '5px', fontSize: '11px',
                   fontWeight: 500, cursor: 'pointer', border: 'none',
                   background: bulkAction === a ? '#1565C0' : '#fff',
                   color: bulkAction === a ? '#fff' : '#444',
                 }}>
-                  {a === 'add' ? 'Add to' : 'Move to'}
+                  {a === 'add' ? 'Add to' : a === 'move' ? 'Move to' : 'Remove from'}
                 </button>
               ))}
             </div>
@@ -223,7 +233,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               style={{ padding: '4px 8px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px', flex: 1 }}>
               <option value="">Select look...</option>
               {allLooks.map(l => <option key={l} value={l}>Look {l}</option>)}
-              <option value="new">+ New Look</option>
+              {bulkAction !== 'remove' && <option value="new">+ New Look</option>}
             </select>
             <span style={{ fontSize: '11px', color: '#888' }}>or</span>
             <input
@@ -291,6 +301,23 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
 
         {/* Item list */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtered.length === 0 && locationFilter !== 'all' && (
+            <div style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
+                {items.some(i => i.custodyLocation === locationFilter)
+                  ? 'No items here match the current filters.'
+                  : locationFilter === 'at_studio' ? 'No items have been scanned to studio yet.'
+                  : locationFilter === 'at_client' ? 'No items are currently at client.'
+                  : 'No items are currently in transit.'}
+              </div>
+              <button onClick={() => setLocationFilter('all')} style={{
+                padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', cursor: 'pointer',
+              }}>
+                Show all items
+              </button>
+            </div>
+          )}
           {filtered.map((item, i) => (
             <div key={item.id} style={{
               display: 'flex', alignItems: 'center', gap: '10px',
@@ -321,11 +348,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
                     <span style={{ fontSize: '10px', fontWeight: 700, color: '#7B1FA2' }}>L{look}</span>
                     <button
                       onClick={() => removeLookFromItem(item, look)}
-                      disabled={item.looks.length <= 1}
-                      title={item.looks.length <= 1 ? "Can't remove last look" : `Remove from Look ${look}`}
+                      title={`Remove from Look ${look}`}
                       style={{
-                        background: 'none', border: 'none', cursor: item.looks.length > 1 ? 'pointer' : 'default',
-                        color: item.looks.length > 1 ? '#7B1FA2' : '#ccc',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#7B1FA2',
                         fontSize: '11px', padding: '0 2px', lineHeight: 1,
                       }}>
                       ✕
@@ -373,7 +399,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
 
         {/* Footer */}
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E0E0E0', background: '#F9F9F9', fontSize: '11px', color: '#888', textAlign: 'center' }}>
-          Tap ✕ on a look pill to remove · Use "+ Look" to add · Select multiple for bulk actions
+          Tap ✕ on a look pill to remove · Use "+ Look" to add · Select items for bulk add / move / remove
         </div>
       </div>
     </>
