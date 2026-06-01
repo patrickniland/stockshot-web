@@ -38,7 +38,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
     return map
   })()
   const hasExtraFields = Object.keys(extraFieldOptions).length > 0
-  const [bulkAction, setBulkAction] = useState<'add' | 'move'>('add')
+  const [bulkAction, setBulkAction] = useState<'add' | 'move' | 'remove'>('add')
 
   const receivedItems = locationFilter === 'all' ? items : items.filter(i => i.custodyLocation === locationFilter)
   const lookFiltered = filterLook === 'all' ? receivedItems : receivedItems.filter(i =>
@@ -82,7 +82,6 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   }
 
   function removeLookFromItem(item: StockItem, look: number) {
-    if (item.looks.length <= 1) return
     onUpdateItem(item.id, item.looks.filter(l => l !== look))
   }
 
@@ -106,8 +105,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           ? item.looks
           : [...item.looks, look].sort((a, b) => a - b)
         return { ...item, looks: newLooks }
-      } else {
+      } else if (bulkAction === 'move') {
         return { ...item, looks: [look] }
+      } else {
+        return { ...item, looks: item.looks.filter(l => l !== look) }
       }
     })
     updatedItems.forEach(item => {
@@ -217,14 +218,14 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               {selectedIds.size} selected
             </span>
             <div style={{ display: 'flex', gap: '6px' }}>
-              {(['add', 'move'] as const).map(a => (
+              {(['add', 'move', 'remove'] as const).map(a => (
                 <button key={a} onClick={() => setBulkAction(a)} style={{
                   padding: '4px 10px', borderRadius: '5px', fontSize: '11px',
                   fontWeight: 500, cursor: 'pointer', border: 'none',
                   background: bulkAction === a ? '#1565C0' : '#fff',
                   color: bulkAction === a ? '#fff' : '#444',
                 }}>
-                  {a === 'add' ? 'Add to' : 'Move to'}
+                  {a === 'add' ? 'Add to' : a === 'move' ? 'Move to' : 'Remove from'}
                 </button>
               ))}
             </div>
@@ -232,7 +233,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               style={{ padding: '4px 8px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px', flex: 1 }}>
               <option value="">Select look...</option>
               {allLooks.map(l => <option key={l} value={l}>Look {l}</option>)}
-              <option value="new">+ New Look</option>
+              {bulkAction !== 'remove' && <option value="new">+ New Look</option>}
             </select>
             <span style={{ fontSize: '11px', color: '#888' }}>or</span>
             <input
@@ -347,11 +348,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
                     <span style={{ fontSize: '10px', fontWeight: 700, color: '#7B1FA2' }}>L{look}</span>
                     <button
                       onClick={() => removeLookFromItem(item, look)}
-                      disabled={item.looks.length <= 1}
-                      title={item.looks.length <= 1 ? "Can't remove last look" : `Remove from Look ${look}`}
+                      title={`Remove from Look ${look}`}
                       style={{
-                        background: 'none', border: 'none', cursor: item.looks.length > 1 ? 'pointer' : 'default',
-                        color: item.looks.length > 1 ? '#7B1FA2' : '#ccc',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#7B1FA2',
                         fontSize: '11px', padding: '0 2px', lineHeight: 1,
                       }}>
                       ✕
@@ -399,7 +399,7 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
 
         {/* Footer */}
         <div style={{ padding: '12px 20px', borderTop: '1px solid #E0E0E0', background: '#F9F9F9', fontSize: '11px', color: '#888', textAlign: 'center' }}>
-          Tap ✕ on a look pill to remove · Use "+ Look" to add · Select multiple for bulk actions
+          Tap ✕ on a look pill to remove · Use "+ Look" to add · Select items for bulk add / move / remove
         </div>
       </div>
     </>
