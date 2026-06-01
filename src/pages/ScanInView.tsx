@@ -26,7 +26,6 @@ type RecentScan = {
 }
 
 type PendingAction =
-  | { type: 'wrongShoot'; item: StockItem; fromShootId: string; fromShootName: string }
   | { type: 'confirmAdd'; barcode: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -123,7 +122,6 @@ export default function ScanInView() {
   const stylingMode = useAppStore(s => s.stylingMode)
   const setStylingMode = useAppStore(s => s.setStylingMode)
   const commitScanIn = useAppStore(s => s.commitScanIn)
-  const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
   const restoreItemState = useAppStore(s => s.restoreItemState)
   const removeItemFromShoot = useAppStore(s => s.removeItemFromShoot)
@@ -206,15 +204,9 @@ export default function ScanInView() {
     const raw = barcode.trim()
     if (!raw || !canScan || pendingAction) return
 
-    // Read directly from store to avoid stale React closure (rapid scanner fire)
-    const currentShoots = useAppStore.getState().savedShoots
-
-    let foundItem: StockItem | null = null
-    let foundShootId: string | null = null
-    for (const shoot of currentShoots) {
-      const match = shoot.items.find(i => matchesBarcode(i, raw))
-      if (match) { foundItem = match; foundShootId = shoot.id; break }
-    }
+    // Only search the current shoot — items in other shoots are independent
+    const currentShoot = useAppStore.getState().savedShoots.find(s => s.id === selectedShootId)
+    const foundItem = currentShoot?.items.find(i => matchesBarcode(i, raw)) ?? null
 
     if (!foundItem) {
       if (selectedShoot?.isUnassigned) {
@@ -228,20 +220,6 @@ export default function ScanInView() {
       return
     }
 
-    if (foundShootId !== selectedShootId) {
-      const fromShoot = currentShoots.find(s => s.id === foundShootId)
-      setFlashState('error')
-      setTimeout(() => setFlashState(null), 350)
-      try { navigator.vibrate([100, 50, 100]) } catch {}
-      setPendingAction({
-        type: 'wrongShoot',
-        item: foundItem,
-        fromShootId: foundShootId!,
-        fromShootName: fromShoot?.name ?? 'another shoot',
-      })
-      return
-    }
-
     const hasHistory = (foundItem.custodyHistory ?? []).length > 0
     if (foundItem.custodyLocation === scanInLocation && hasHistory) {
       triggerError(`Already ${locationLabel(scanInLocation)} — ${foundItem.styleNumber || foundItem.qrCodeValue}`)
@@ -249,7 +227,7 @@ export default function ScanInView() {
       return
     }
 
-    doScanItem(foundItem, foundShootId!)
+    doScanItem(foundItem, selectedShootId!)
   }
 
   function doScanItem(item: StockItem, shootId: string) {
@@ -544,34 +522,6 @@ export default function ScanInView() {
 
   const pendingActions = (
     <>
-      {pendingAction?.type === 'wrongShoot' && (
-        <Card className="border-[var(--color-warning)] bg-amber-50">
-          <p className="text-[var(--text-sm)] font-semibold text-[var(--color-warning)] mb-1">
-            Item found in a different shoot: <em>{pendingAction.fromShootName}</em>
-          </p>
-          <p className="text-[var(--text-xs)] text-slate-600 mb-3">
-            {pendingAction.item.styleNumber || pendingAction.item.qrCodeValue}
-            {pendingAction.item.description ? ` — ${pendingAction.item.description}` : ''}
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="danger" size="sm" className="flex-1" onClick={() => {
-              moveItemsToShoot([pendingAction.item.id], selectedShootId)
-              doScanItem({ ...pendingAction.item }, selectedShootId)
-              setPendingAction(null)
-            }}>
-              Move to {selectedShoot?.name ?? 'shoot'} + Scan In
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => {
-              doScanItem(pendingAction.item, pendingAction.fromShootId)
-              setPendingAction(null)
-            }}>
-              Keep in current shoot
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setPendingAction(null)}>Cancel</Button>
-          </div>
-        </Card>
-      )}
-
       {pendingAction?.type === 'confirmAdd' && (
         <Card className="border-[var(--color-danger)] bg-red-50">
           <p className="text-[var(--text-sm)] font-semibold text-[var(--color-danger)] mb-1">
