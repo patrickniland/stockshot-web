@@ -7,7 +7,7 @@ import {
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient, deleteItem } from '../lib/db'
 import { supabase } from '../lib/supabase'
 
 interface AppStore {
@@ -83,6 +83,7 @@ interface AppStore {
   bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string, notes?: string) => void
   moveItemsToShoot: (itemIds: string[], targetShootId: string) => void
   addItemToShoot: (item: StockItem, shootId: string) => void
+  removeItemFromShoot: (itemId: string, shootId: string) => void
   restoreItemState: (itemId: string, updates: Partial<StockItem>) => void
 
   scanIn: (sku: string) => void
@@ -601,6 +602,20 @@ const useAppStore = create<AppStore>()(
         })
         upsertItem(item, shootId, orgId)
           .catch(e => console.error('[Sync] addItemToShoot error:', e))
+      },
+
+      removeItemFromShoot: (itemId, shootId) => {
+        const { orgId } = get()
+        set(s => ({
+          savedShoots: s.savedShoots.map(sh =>
+            sh.id === shootId
+              ? { ...sh, items: sh.items.filter(i => i.id !== itemId) }
+              : sh
+          ),
+        }))
+        if (orgId) {
+          deleteItem(itemId).catch(e => console.error('[Sync] removeItemFromShoot error:', e))
+        }
       },
 
       restoreItemState: (itemId, updates) => {

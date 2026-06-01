@@ -39,6 +39,7 @@ export default function StockListView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [bulkProductType, setBulkProductType] = useState('')
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
   // Bulk mark-at-studio
   const [showMarkStudio, setShowMarkStudio] = useState(false)
@@ -57,6 +58,8 @@ export default function StockListView() {
   const currentOperator = useAppStore(s => s.currentOperator)
   const bulkSetCustody = useAppStore(s => s.bulkSetCustody)
   const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
+  const restoreItemState = useAppStore(s => s.restoreItemState)
+  const removeItemFromShoot = useAppStore(s => s.removeItemFromShoot)
 
   const activeShoot = savedShoots.find(s => s.id === activeShootId) ?? null
   const allItems = activeShoot?.items ?? []
@@ -396,6 +399,67 @@ export default function StockListView() {
                     <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>{item.notes}</div>
                   )}
                 </div>
+
+                {/* Release actions — only available while item is at client */}
+                {item.custodyLocation === 'at_client' && activeShootId && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Release
+                    </div>
+                    <button
+                      onClick={() => {
+                        restoreItemState(item.id, {
+                          custodyLocation: 'at_client',
+                          custodyHistory: [],
+                          lastScannedAt: null,
+                          lastScannedBy: null,
+                        })
+                        setExpandedId(null)
+                      }}
+                      style={{
+                        padding: '6px 10px', background: '#FFF8E1', border: '1px solid #FFE082',
+                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: '#F57F17',
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      ↩ Reset to pending
+                      <div style={{ fontSize: '10px', fontWeight: 400, color: '#888', marginTop: '1px' }}>
+                        Keeps item in shoot, clears scan
+                      </div>
+                    </button>
+                    {confirmRemoveId === item.id ? (
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: '#666' }}>Remove permanently?</span>
+                        <button
+                          onClick={() => { removeItemFromShoot(item.id, activeShootId); setConfirmRemoveId(null); setExpandedId(null) }}
+                          style={{ padding: '4px 10px', background: '#C62828', color: '#fff', border: 'none', borderRadius: '5px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          Yes, remove
+                        </button>
+                        <button
+                          onClick={() => setConfirmRemoveId(null)}
+                          style={{ padding: '4px 8px', background: 'none', border: 'none', fontSize: '11px', color: '#888', cursor: 'pointer' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmRemoveId(item.id)}
+                        style={{
+                          padding: '6px 10px', background: '#FFEBEE', border: '1px solid #FFCDD2',
+                          borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: '#C62828',
+                          cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        🗑 Remove from shoot
+                        <div style={{ fontSize: '10px', fontWeight: 400, color: '#888', marginTop: '1px' }}>
+                          Deletes item from this shoot
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

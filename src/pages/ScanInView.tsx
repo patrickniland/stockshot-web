@@ -104,6 +104,7 @@ export default function ScanInView() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [showAllScans, setShowAllScans] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
   const [flashState, setFlashState] = useState<'success' | 'error' | null>(null)
   const [soundEnabled, setSoundEnabled] = useState(
     () => localStorage.getItem('stockshot_scan_sound') === 'true'
@@ -125,6 +126,7 @@ export default function ScanInView() {
   const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
   const restoreItemState = useAppStore(s => s.restoreItemState)
+  const removeItemFromShoot = useAppStore(s => s.removeItemFromShoot)
   const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
   const lastScanFeedback = useAppStore(s => s.lastScanFeedback)
 
@@ -653,6 +655,16 @@ export default function ScanInView() {
     )
   }
 
+  function resetToPending(item: StockItem) {
+    restoreItemState(item.id, {
+      custodyLocation: 'at_client',
+      custodyHistory: [],
+      lastScannedAt: null,
+      lastScannedBy: null,
+    })
+    setConfirmRemoveId(null)
+  }
+
   const itemTable = (items: StockItem[], emptyMsg = 'No items at this location') => (
     <div>
       <div className="flex px-4 py-1.5 bg-slate-50 border-b border-[var(--color-border)] text-[var(--text-xs)] font-semibold text-slate-400 uppercase tracking-wide">
@@ -665,16 +677,52 @@ export default function ScanInView() {
         {items.length === 0 ? (
           <div className="px-4 py-8 text-center text-[var(--text-sm)] text-slate-400">{emptyMsg}</div>
         ) : items.map((item, i) => (
-          <div
-            key={item.id}
-            className={`flex items-center px-4 py-2 border-b border-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
-          >
-            <span className="w-7 text-[var(--text-xs)] text-slate-300">{i + 1}</span>
-            <span className="w-32 text-[var(--text-sm)] font-semibold text-slate-900 truncate">{item.styleNumber}</span>
-            <span className="flex-1 text-[var(--text-xs)] text-slate-500 truncate">{item.description || '—'}</span>
-            <span className="w-14 text-right text-[var(--text-xs)] text-slate-400">
-              {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
-            </span>
+          <div key={item.id}>
+            <div
+              className={`flex items-center px-4 py-2 border-b border-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+            >
+              <span className="w-7 text-[var(--text-xs)] text-slate-300">{i + 1}</span>
+              <span className="w-32 text-[var(--text-sm)] font-semibold text-slate-900 truncate">{item.styleNumber}</span>
+              <span className="flex-1 text-[var(--text-xs)] text-slate-500 truncate">{item.description || '—'}</span>
+              <span className="w-14 text-right text-[var(--text-xs)] text-slate-400">
+                {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
+              </span>
+              {item.custodyLocation === 'at_client' && (
+                <div className="flex gap-1 ml-2 flex-shrink-0">
+                  <button
+                    onClick={() => resetToPending(item)}
+                    title="Reset to pending (undo scan, keep in shoot)"
+                    className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-warning)] hover:bg-amber-50 transition-colors"
+                  >
+                    ↩
+                  </button>
+                  {confirmRemoveId === item.id ? (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => { removeItemFromShoot(item.id, selectedShootId); setConfirmRemoveId(null) }}
+                        className="px-1.5 py-0.5 rounded text-[var(--text-xs)] bg-[var(--color-danger)] text-white"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemoveId(null)}
+                        className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:bg-slate-100"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmRemoveId(item.id)}
+                      title="Remove from shoot entirely"
+                      className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-danger)] hover:bg-red-50 transition-colors"
+                    >
+                      🗑
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
