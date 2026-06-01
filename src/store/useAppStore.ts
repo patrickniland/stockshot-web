@@ -81,6 +81,7 @@ interface AppStore {
 
   setCustody: (itemId: string, location: CustodyLocation, operator: string, shootId?: string, notes?: string) => void
   bulkSetCustody: (itemIds: string[], location: CustodyLocation, operator: string, notes?: string) => void
+  commitScanIn: (itemId: string, shootId: string, location: CustodyLocation, operator: string, looks: number[], shotStatus?: ShotStatus) => void
   moveItemsToShoot: (itemIds: string[], targetShootId: string) => void
   addItemToShoot: (item: StockItem, shootId: string) => void
   removeItemFromShoot: (itemId: string, shootId: string) => void
@@ -555,6 +556,42 @@ const useAppStore = create<AppStore>()(
         itemIds.forEach(id => get().setCustody(id, location, operator, undefined, notes))
       },
 
+      commitScanIn: (itemId, shootId, location, operator, looks, shotStatus?) => {
+        const { savedShoots, orgId } = get()
+        const now = new Date().toISOString()
+
+        let foundItem: StockItem | null = null
+        for (const shoot of savedShoots) {
+          const item = shoot.items.find(i => i.id === itemId)
+          if (item) { foundItem = item; break }
+        }
+        if (!foundItem) return
+
+        const event: CustodyEvent = { location, timestamp: now, operator, shoot_id: shootId }
+        const updatedItem: StockItem = {
+          ...foundItem,
+          custodyLocation: location,
+          custodyHistory: [...(foundItem.custodyHistory ?? []), event],
+          lastScannedAt: now,
+          lastScannedBy: operator,
+          looks,
+          ...(shotStatus !== undefined ? { shotStatus } : {}),
+        }
+
+        set(s => ({
+          savedShoots: s.savedShoots.map(sh =>
+            sh.id === shootId
+              ? { ...sh, items: sh.items.map(i => i.id === itemId ? updatedItem : i) }
+              : sh
+          ),
+        }))
+
+        if (orgId) {
+          upsertItem(updatedItem, shootId, orgId)
+            .catch(e => console.error('[Sync] commitScanIn error:', e))
+        }
+      },
+
       moveItemsToShoot: (itemIds, targetShootId) => {
         const { savedShoots, orgId } = get()
         if (!orgId) return
@@ -864,7 +901,6 @@ const useAppStore = create<AppStore>()(
         currentIntakeLook: s.currentIntakeLook,
         scanInLocation: s.scanInLocation,
         scanOutLocation: s.scanOutLocation,
-        currentOperator: s.currentOperator,
         stylingMode: s.stylingMode,
         lastPulledAt: s.lastPulledAt,
         lastSyncedAt: s.lastSyncedAt,

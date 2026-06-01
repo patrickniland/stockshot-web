@@ -122,7 +122,7 @@ export default function ScanInView() {
   const bumpLook = useAppStore(s => s.bumpLook)
   const stylingMode = useAppStore(s => s.stylingMode)
   const setStylingMode = useAppStore(s => s.setStylingMode)
-  const setCustody = useAppStore(s => s.setCustody)
+  const commitScanIn = useAppStore(s => s.commitScanIn)
   const moveItemsToShoot = useAppStore(s => s.moveItemsToShoot)
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
   const restoreItemState = useAppStore(s => s.restoreItemState)
@@ -265,13 +265,14 @@ export default function ScanInView() {
       ? [...item.looks, currentIntakeLook]
       : item.looks
 
-    setCustody(item.id, scanInLocation, currentOperator, shootId)
-
-    if (stylingMode) {
-      useAppStore.getState().updateItem(item.id, { looks, shotStatus: 'notRequired' })
-    } else if (looks !== item.looks) {
-      useAppStore.getState().updateItem(item.id, { looks })
-    }
+    commitScanIn(
+      item.id,
+      shootId,
+      scanInLocation,
+      currentOperator,
+      looks,
+      stylingMode ? 'notRequired' : undefined,
+    )
 
     setRecentScans(prev2 => [
       {

@@ -192,9 +192,9 @@ export default function ShotListView() {
         <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
         {([
           { value: 'all',        label: 'All' },
-          { value: 'at_studio',  label: '🏠 At Studio' },
-          { value: 'at_client',  label: '📦 At Client' },
-          { value: 'in_transit', label: '🚚 In Transit' },
+          { value: 'at_studio',  label: 'At Studio' },
+          { value: 'at_client',  label: 'At Client' },
+          { value: 'in_transit', label: 'In Transit' },
         ] as const).map(opt => (
           <button key={opt.value} onClick={() => setShotListLocationFilter(opt.value)} style={{
             padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
@@ -238,8 +238,8 @@ export default function ShotListView() {
 
         <button onClick={() => exportShotListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>XLS</button>
         <button onClick={() => setShowListPdfModal(true)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>List PDF</button>
-        <button onClick={() => setShowLabelModal(true)} style={{ padding: '6px 10px', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>🏷 Labels PDF</button>
-        <button onClick={() => setShowLookBuilder(true)} style={{ padding: '6px 10px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>👁 Look Builder</button>
+        <button onClick={() => setShowLabelModal(true)} style={{ padding: '6px 10px', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>Labels PDF</button>
+        <button onClick={() => setShowLookBuilder(true)} style={{ padding: '6px 10px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>Look Builder</button>
       </div>
 
       {/* Items */}
@@ -374,7 +374,7 @@ export default function ShotListView() {
       {showLabelModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', width: '400px', maxWidth: '90vw' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1rem', color: '#111' }}>🏷 Label Grid PDF</h2>
+            <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1rem', color: '#111' }}>Label Grid PDF</h2>
 
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '6px' }}>Labels per row</label>
@@ -558,9 +558,9 @@ function SortableLookGroup({
 // ── ShotRow ───────────────────────────────────────────────────────────────────
 
 const CUSTODY_ICON: Record<string, string> = {
-  at_client:  '📦',
-  in_transit: '🚚',
-  at_studio:  '🏠',
+  at_client:  'C',
+  in_transit: 'T',
+  at_studio:  'S',
 }
 
 function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle, onAngleToggle, onShotStatusChange, onAssignProductType }: {

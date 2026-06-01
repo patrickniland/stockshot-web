@@ -173,9 +173,9 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
           <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
           {([
             { value: 'all',        label: 'All' },
-            { value: 'at_studio',  label: '🏠 At Studio' },
-            { value: 'at_client',  label: '📦 At Client' },
-            { value: 'in_transit', label: '🚚 In Transit' },
+            { value: 'at_studio',  label: 'At Studio' },
+            { value: 'at_client',  label: 'At Client' },
+            { value: 'in_transit', label: 'In Transit' },
           ] as const).map(opt => (
             <button key={opt.value} onClick={() => setLocationFilter(opt.value)} style={{
               padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
