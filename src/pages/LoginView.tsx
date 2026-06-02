@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '../lib/auth'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Card } from '../components/ui/Card'
 
 export default function LoginView() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -37,42 +40,37 @@ export default function LoginView() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#F5F5F5', padding: '1rem',
-    }}>
-      <div style={{ width: '100%', maxWidth: '380px' }}>
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface-muted)] p-4">
+      <div className="w-full max-w-[380px]">
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ display: 'inline-flex', marginBottom: '16px' }}>
-            <div style={{ width: '48px', height: '48px', display: 'flex' }}>
-              <div style={{ flex: 1, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#fff', fontSize: '16px', fontWeight: 700 }}>E</span>
+        <div className="text-center mb-8">
+          <div className="inline-flex mb-4">
+            <div className="w-12 h-12 flex">
+              <div className="flex-1 bg-black flex items-center justify-center">
+                <span className="text-white text-[16px] font-bold">E</span>
               </div>
-              <div style={{ flex: 1, background: '#fff', border: '1px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#000', fontSize: '16px', fontWeight: 700 }}>R</span>
+              <div className="flex-1 bg-white border border-black flex items-center justify-center">
+                <span className="text-black text-[16px] font-bold">R</span>
               </div>
             </div>
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111', margin: 0 }}>StockShot</h1>
-          <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>by Enhance Retail</p>
+          <h1 className="text-[24px] font-bold text-neutral-900 m-0">StockShot</h1>
+          <p className="text-[13px] text-neutral-400 mt-1">by Enhance Retail</p>
         </div>
 
         {/* Card */}
-        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E0E0E0', padding: '2rem' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '1.5rem', textAlign: 'center' }}>
+        <Card padding="lg">
+          <h2 className="text-[16px] font-semibold text-neutral-900 mb-6 text-center">
             {mode === 'login' ? 'Sign in to your studio' : 'Create your account'}
           </h2>
 
           {/* Google button */}
-          <button onClick={handleGoogle} disabled={loading} style={{
-            width: '100%', padding: '12px', border: '1px solid #E0E0E0',
-            borderRadius: '8px', background: '#fff', cursor: loading ? 'default' : 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-            fontSize: '14px', fontWeight: 500, color: '#444', marginBottom: '1rem',
-            opacity: loading ? 0.7 : 1,
-          }}>
+          <button
+            onClick={handleGoogle}
+            disabled={loading}
+            className="w-full py-3 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-white flex items-center justify-center gap-2.5 text-[14px] font-medium text-neutral-700 mb-4 hover:bg-[var(--color-surface-muted)] transition-colors disabled:opacity-70 disabled:cursor-default cursor-pointer"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -82,60 +80,68 @@ export default function LoginView() {
             Continue with Google
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
-            <div style={{ flex: 1, height: '1px', background: '#E0E0E0' }} />
-            <span style={{ fontSize: '11px', color: '#aaa' }}>or</span>
-            <div style={{ flex: 1, height: '1px', background: '#E0E0E0' }} />
+          {/* Divider */}
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="flex-1 h-px bg-[var(--color-border)]" />
+            <span className="text-[11px] text-neutral-300">or</span>
+            <div className="flex-1 h-px bg-[var(--color-border)]" />
           </div>
 
-          {/* Email/password */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Email</label>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
+          {/* Email */}
+          <div className="mb-3">
+            <label className="text-[11px] text-neutral-500 block mb-1">Email</label>
+            <Input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               placeholder="you@studio.com"
-              style={{ width: '100%', padding: '10px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Password</label>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
+
+          {/* Password */}
+          <div className="mb-4">
+            <label className="text-[11px] text-neutral-500 block mb-1">Password</label>
+            <Input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
               onKeyDown={e => e.key === 'Enter' && handleEmail()}
-              style={{ width: '100%', padding: '10px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
 
           {error && (
-            <div style={{ background: '#FFEBEE', color: '#B71C1C', padding: '10px 12px', borderRadius: '7px', fontSize: '12px', marginBottom: '12px' }}>
+            <div className="bg-[var(--color-danger)]/10 text-[var(--color-danger)] px-3 py-2.5 rounded-[var(--radius-md)] text-[12px] mb-3">
               {error}
             </div>
           )}
 
           {message && (
-            <div style={{ background: '#E8F5E9', color: '#2E7D32', padding: '10px 12px', borderRadius: '7px', fontSize: '12px', marginBottom: '12px' }}>
+            <div className="bg-[var(--color-success)]/10 text-[var(--color-success)] px-3 py-2.5 rounded-[var(--radius-md)] text-[12px] mb-3">
               {message}
             </div>
           )}
 
-          <button onClick={handleEmail} disabled={loading || !email || !password} style={{
-            width: '100%', padding: '11px', background: (!email || !password || loading) ? '#E0E0E0' : '#1C1C1E',
-            color: (!email || !password || loading) ? '#999' : '#fff',
-            border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
-            cursor: (!email || !password || loading) ? 'default' : 'pointer',
-          }}>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleEmail}
+            disabled={loading || !email || !password}
+            className="w-full"
+          >
             {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
-          </button>
+          </Button>
 
-          <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginTop: '1rem' }}>
+          <p className="text-center text-[12px] text-neutral-400 mt-4">
             {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setMessage(null) }}
-              style={{ background: 'none', border: 'none', color: '#1565C0', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>
+            <button
+              onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setMessage(null) }}
+              className="bg-transparent border-none text-[var(--color-info)] cursor-pointer text-[12px] font-medium hover:underline"
+            >
               {mode === 'login' ? 'Sign up' : 'Sign in'}
             </button>
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   )
