@@ -445,6 +445,7 @@ export default function StockListView() {
                               custodyHistory: [],
                               lastScannedAt: null,
                               lastScannedBy: null,
+                              looks: [],
                             })
                             setExpandedId(null)
                           }}
