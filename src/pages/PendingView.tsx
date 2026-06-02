@@ -1,10 +1,12 @@
 // StockShot — Pending / Missing Items View
 
 import { useState } from 'react'
+import { Books, CheckCircle, MagnifyingGlass, ArrowUp, ArrowDown, DownloadSimple, FilePdf } from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
 import { exportMissingItemsCSV } from '../lib/csvExport'
 import { exportMissingItemsPDF } from '../lib/pdfExporter'
+import { Button } from '../components/ui/Button'
 
 export default function PendingView() {
   useNavSync({ onEnter: 'pull' })
@@ -33,15 +35,15 @@ export default function PendingView() {
     })
 
   if (!shoot) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>No active shoot.</div>
+    return <div className="p-8 text-center text-neutral-400">No active shoot.</div>
   }
 
   if (!meaningful) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p style={{ fontSize: '40px', marginBottom: '12px' }}>📚</p>
-        <p style={{ fontSize: '15px', fontWeight: 500, color: '#111', marginBottom: '6px' }}>Reference file mode</p>
-        <p style={{ fontSize: '12px', color: '#666' }}>
+      <div className="p-8 text-center">
+        <Books size={48} weight="duotone" className="mx-auto mb-3 text-neutral-400" />
+        <p className="text-[15px] font-medium text-neutral-900 mb-1.5">Reference file mode</p>
+        <p className="text-[12px] text-neutral-500">
           This shoot was imported as a mapping reference.<br />
           Outstanding items are not tracked — scan items in freely.
         </p>
@@ -51,62 +53,72 @@ export default function PendingView() {
 
   if (pending.length === 0) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p style={{ fontSize: '40px', marginBottom: '12px' }}>✅</p>
-        <p style={{ fontSize: '15px', fontWeight: 500, color: '#111' }}>All items scanned in!</p>
-        <p style={{ fontSize: '12px', color: '#666' }}>No outstanding items remaining.</p>
+      <div className="p-8 text-center">
+        <CheckCircle size={48} weight="fill" className="mx-auto mb-3 text-[var(--color-success)]" />
+        <p className="text-[15px] font-medium text-neutral-900 mb-1">All items scanned in!</p>
+        <p className="text-[12px] text-neutral-500">No outstanding items remaining.</p>
       </div>
     )
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div style={{ padding: '10px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '16px', fontWeight: 700, color: '#111' }}>Missing Items</span>
-        <span style={{ background: '#E65100', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px' }}>
+      <div className="px-4 py-2.5 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center gap-2.5 flex-wrap">
+        <span className="text-[16px] font-bold text-neutral-900">Missing Items</span>
+        <span className="bg-[var(--color-warning)] text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
           {pending.length}
         </span>
-        <div style={{ flex: 1 }} />
+        <div className="flex-1" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fff', border: '1px solid #E0E0E0', borderRadius: '7px', padding: '5px 10px' }}>
-          <span style={{ fontSize: '12px', color: '#888' }}>🔍</span>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search..." style={{ border: 'none', outline: 'none', fontSize: '12px', width: '140px' }} />
+        <div className="flex items-center gap-1.5 bg-white border border-[var(--color-border)] rounded-lg px-2.5 py-1.5">
+          <MagnifyingGlass size={13} className="text-neutral-400 shrink-0" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search..."
+            className="border-none outline-none text-[12px] w-36 bg-transparent"
+          />
         </div>
 
-        <button onClick={() => setSortAsc(!sortAsc)} style={{ padding: '6px 10px', background: '#E0E0E0', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-          {sortAsc ? '↑' : '↓'}
+        <button
+          onClick={() => setSortAsc(!sortAsc)}
+          className="p-1.5 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-md cursor-pointer flex items-center text-neutral-600 hover:bg-[var(--color-border)]"
+        >
+          {sortAsc ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
         </button>
 
-        <button onClick={() => exportMissingItemsCSV(filtered)} style={{ padding: '6px 12px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>XLS</button>
-        <button onClick={() => exportMissingItemsPDF(filtered)} style={{ padding: '6px 12px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>PDF</button>
+        <Button variant="secondary" size="sm" onClick={() => exportMissingItemsCSV(filtered)}>
+          <DownloadSimple size={13} className="mr-1" /> XLS
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => exportMissingItemsPDF(filtered)}>
+          <FilePdf size={13} className="mr-1" /> PDF
+        </Button>
       </div>
 
       {/* Column headers */}
-      <div style={{ display: 'flex', padding: '7px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', fontSize: '11px', fontWeight: 600, color: '#666' }}>
-        <span style={{ width: '36px', textAlign: 'center' }}>#</span>
-        <span style={{ width: '150px' }}>Style Number</span>
-        <span style={{ flex: 1 }}>Description</span>
-        <span style={{ width: '140px' }}>SKU</span>
+      <div className="flex px-4 py-1.5 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] text-[11px] font-semibold text-neutral-500">
+        <span className="w-9 text-center">#</span>
+        <span className="w-[150px]">Style Number</span>
+        <span className="flex-1">Description</span>
+        <span className="w-[140px]">SKU</span>
       </div>
 
       {/* Rows */}
-      <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+      <div className="flex-1 overflow-y-auto bg-white">
         {filtered.map((item, i) => (
-          <div key={item.id} style={{
-            display: 'flex', alignItems: 'center',
-            borderBottom: '1px solid #F5F5F5',
-            background: i % 2 === 0 ? '#fff' : '#FAFAFA',
-          }}>
-            <div style={{ width: '3px', alignSelf: 'stretch', background: '#E65100', flexShrink: 0 }} />
-            <div style={{ display: 'flex', flex: 1, alignItems: 'center', padding: '9px 13px' }}>
-              <span style={{ width: '33px', textAlign: 'center', fontSize: '11px', color: '#999' }}>{i + 1}</span>
-              <span style={{ width: '150px', fontSize: '13px', color: '#111', fontWeight: 500 }}>{item.styleNumber}</span>
-              <span style={{ flex: 1, fontSize: '12px', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div
+            key={item.id}
+            className={`flex items-center border-b border-[var(--color-border)]/50 ${i % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface-muted)]'}`}
+          >
+            <div className="w-0.5 self-stretch bg-[var(--color-warning)] shrink-0" />
+            <div className="flex flex-1 items-center px-3.5 py-2.5">
+              <span className="w-8 text-center text-[11px] text-neutral-400">{i + 1}</span>
+              <span className="w-[150px] text-[13px] text-neutral-900 font-medium">{item.styleNumber}</span>
+              <span className="flex-1 text-[12px] text-neutral-500 truncate">
                 {item.description || '—'}
               </span>
-              <span style={{ width: '140px', fontSize: '12px', color: '#888', fontFamily: 'monospace' }}>{item.sku}</span>
+              <span className="w-[140px] text-[12px] text-neutral-400 font-mono">{item.sku}</span>
             </div>
           </div>
         ))}
