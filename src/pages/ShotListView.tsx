@@ -1,5 +1,4 @@
 // StockShot — Shot List View
-// Full version: QR codes, angle tracking, look/product type grouping, label PDF export
 
 import { useState } from 'react'
 import {
@@ -21,6 +20,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import {
+  FilmSlate, MagnifyingGlass, Package, Truck, Storefront,
+  DotsSixVertical, CaretUp, CaretDown, DownloadSimple, FilePdf, Tag, SquaresFour,
+} from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
 import { StockItem, ShotStatus } from '../types'
@@ -28,6 +31,8 @@ import { exportShotListCSV } from '../lib/csvExport'
 import { exportShotListPDF, exportLabelGridPDF, LabelOptions } from '../lib/pdfExporter'
 import QRCode from '../components/QRCode'
 import LookBuilder from '../components/LookBuilder'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
 
 export default function ShotListView() {
   useNavSync({ onEnter: 'pull', onLeave: 'push' })
@@ -150,7 +155,7 @@ export default function ShotListView() {
   const lookGroups = groupBy === 'look' ? groups.filter(g => g.look != null) : []
   const noLookGroup = groupBy === 'look' ? (groups.find(g => g.look == null) ?? null) : null
 
-  // ── Shot row callbacks (shared between sortable and non-sortable paths) ─────
+  // ── Shot row callbacks ─────────────────────────────────────────────────────
 
   function makeShotRowProps(item: StockItem, i: number) {
     return {
@@ -177,75 +182,81 @@ export default function ShotListView() {
 
   if (!shoot) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>
-        <p style={{ fontSize: '40px', marginBottom: '12px' }}>🎬</p>
-        <p style={{ fontWeight: 500 }}>No active shoot</p>
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+        <FilmSlate size={64} weight="duotone" />
+        <p className="font-medium text-slate-600">No active shoot</p>
       </div>
     )
   }
 
+  const selectCls = 'px-2 py-1.5 border border-[var(--color-border)] rounded-[var(--radius-md)] text-sm bg-white text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]'
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="flex flex-col h-full">
 
       {/* Location filter bar */}
-      <div style={{ padding: '8px 16px', background: '#fff', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
+      <div className="px-4 py-2 bg-white border-b border-[var(--color-border)] flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-slate-500 mr-1">Location:</span>
         {([
           { value: 'all',        label: 'All' },
           { value: 'at_studio',  label: 'At Studio' },
           { value: 'at_client',  label: 'At Client' },
           { value: 'in_transit', label: 'In Transit' },
         ] as const).map(opt => (
-          <button key={opt.value} onClick={() => setShotListLocationFilter(opt.value)} style={{
-            padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
-            border: `1.5px solid ${shotListLocationFilter === opt.value ? '#1565C0' : '#E0E0E0'}`,
-            background: shotListLocationFilter === opt.value ? '#E3F2FD' : '#F9F9F9',
-            color: shotListLocationFilter === opt.value ? '#1565C0' : '#666',
-            cursor: 'pointer',
-          }}>
+          <button
+            key={opt.value}
+            onClick={() => setShotListLocationFilter(opt.value)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+              shotListLocationFilter === opt.value
+                ? 'bg-[var(--color-info)]/10 border-[var(--color-info)] text-[var(--color-info)]'
+                : 'bg-[var(--color-surface-muted)] border-[var(--color-border)] text-slate-500 hover:border-slate-300'
+            }`}
+          >
             {opt.label}
           </button>
         ))}
-        <span style={{ fontSize: '11px', color: '#999', marginLeft: 'auto' }}>{scannedItems.length} scanned / {allItems.length} total</span>
+        <span className="text-xs text-slate-400 ml-auto">{scannedItems.length} scanned / {allItems.length} total</span>
       </div>
 
       {/* Toolbar */}
-      <div style={{ padding: '10px 16px', background: '#F5F5F5', borderBottom: '1px solid #E0E0E0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '16px', fontWeight: 700, color: '#111' }}>Shot List</span>
-        <span style={{ fontSize: '13px', color: '#666' }}>({filtered.length} items)</span>
-        <div style={{ flex: 1 }} />
+      <div className="px-4 py-2.5 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center gap-2 flex-wrap">
+        <span className="text-lg font-bold text-slate-900">Shot List</span>
+        <span className="text-sm text-slate-500">({filtered.length} items)</span>
+        <div className="flex-1" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fff', border: '1px solid #E0E0E0', borderRadius: '7px', padding: '5px 10px' }}>
-          <span style={{ fontSize: '12px', color: '#888' }}>🔍</span>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search..." style={{ border: 'none', outline: 'none', fontSize: '12px', width: '120px' }} />
+        <div className="flex items-center gap-1.5 bg-white border border-[var(--color-border)] rounded-[var(--radius-md)] px-3 py-1.5">
+          <MagnifyingGlass size={13} className="text-slate-400 flex-shrink-0" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search..."
+            className="border-none outline-none text-sm w-28 bg-transparent text-slate-900 placeholder:text-slate-400"
+          />
         </div>
 
-        <select value={filter} onChange={e => setFilter(e.target.value as any)}
-          style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
+        <select value={filter} onChange={e => setFilter(e.target.value as any)} className={selectCls}>
           <option value="all">All</option>
           <option value="notShot">Not Shot</option>
           <option value="partial">Partial</option>
           <option value="shot">Shot</option>
         </select>
 
-        <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
-          style={{ padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '12px' }}>
+        <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)} className={selectCls}>
           <option value="look">Group by Look</option>
           <option value="productType">Group by Type</option>
           <option value="none">No Grouping</option>
         </select>
 
-        <button onClick={() => exportShotListCSV(filtered)} style={{ padding: '6px 10px', background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>XLS</button>
-        <button onClick={() => setShowListPdfModal(true)} style={{ padding: '6px 10px', background: '#424242', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>List PDF</button>
-        <button onClick={() => setShowLabelModal(true)} style={{ padding: '6px 10px', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>Labels PDF</button>
-        <button onClick={() => setShowLookBuilder(true)} style={{ padding: '6px 10px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>Look Builder</button>
+        <Button variant="secondary" size="sm" Icon={DownloadSimple} onClick={() => exportShotListCSV(filtered)}>XLS</Button>
+        <Button variant="secondary" size="sm" Icon={FilePdf} onClick={() => setShowListPdfModal(true)}>List PDF</Button>
+        <Button variant="secondary" size="sm" Icon={Tag} onClick={() => setShowLabelModal(true)}>Labels PDF</Button>
+        <Button variant="primary" size="sm" Icon={SquaresFour} onClick={() => setShowLookBuilder(true)}>Look Builder</Button>
       </div>
 
       {/* Items */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#888', fontSize: '13px' }}>
+          <div className="py-12 text-center text-sm text-slate-400">
             No items here yet. Items appear once scanned in.
           </div>
         ) : groupBy === 'look' ? (
@@ -281,20 +292,10 @@ export default function ShotListView() {
 
               <DragOverlay dropAnimation={{ duration: 200, easing: 'ease' }}>
                 {dragActiveId != null ? (
-                  <div style={{
-                    padding: '8px 12px 8px 6px',
-                    background: '#D1C4E9',
-                    borderRadius: '6px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-                    fontSize: '12px', fontWeight: 700, color: '#7B1FA2',
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    cursor: 'grabbing',
-                    userSelect: 'none',
-                    border: '2px solid #9575CD',
-                  }}>
-                    <span style={{ fontSize: '18px', opacity: 0.7, minWidth: '44px', textAlign: 'center' }}>≡</span>
+                  <div className="px-3 py-2 bg-[var(--color-accent)]/20 rounded-[var(--radius-md)] shadow-xl text-xs font-bold text-[var(--color-accent)] flex items-center gap-2 cursor-grabbing select-none border-2 border-[var(--color-accent)]/30">
+                    <DotsSixVertical size={18} className="opacity-70 min-w-[44px] text-center flex-shrink-0" />
                     Look {dragActiveId}
-                    <span style={{ opacity: 0.6, fontWeight: 400 }}>
+                    <span className="opacity-60 font-normal">
                       · {lookGroups.find(g => g.look === dragActiveId)?.items.length ?? 0} items
                     </span>
                   </div>
@@ -305,7 +306,7 @@ export default function ShotListView() {
             {/* No Look Assigned — not sortable, always at bottom */}
             {noLookGroup && (
               <div>
-                <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1 }}>
+                <div className="px-4 py-2 bg-[var(--color-accent)]/10 text-[var(--color-accent)] text-xs font-bold border-b border-[var(--color-border)] sticky top-0 z-10">
                   No Look Assigned — {noLookGroup.items.length} item{noLookGroup.items.length !== 1 ? 's' : ''}
                 </div>
                 {noLookGroup.items.map((item, i) => (
@@ -318,7 +319,7 @@ export default function ShotListView() {
           groups.map((group) => (
             <div key={group.name || 'all'}>
               {group.name && (
-                <div style={{ padding: '8px 16px', background: '#EDE9FE', fontSize: '12px', fontWeight: 700, color: '#7B1FA2', borderBottom: '1px solid #E0E0E0', position: 'sticky', top: 0, zIndex: 1 }}>
+                <div className="px-4 py-2 bg-[var(--color-accent)]/10 text-[var(--color-accent)] text-xs font-bold border-b border-[var(--color-border)] sticky top-0 z-10">
                   {group.name} — {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                 </div>
               )}
@@ -343,104 +344,102 @@ export default function ShotListView() {
 
       {/* List PDF modal */}
       {showListPdfModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', width: '340px', maxWidth: '90vw' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1rem', color: '#111' }}>List PDF Options</h2>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', cursor: 'pointer', fontSize: '13px', color: '#444' }}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+          <Card padding="lg" className="w-80 max-w-[90vw]">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">List PDF Options</h2>
+            <label className="flex items-center gap-2 mb-4 cursor-pointer text-sm text-slate-600">
               <input type="checkbox" checked={listPdfIncludeLocation} onChange={e => setListPdfIncludeLocation(e.target.checked)} />
               Include Location column
             </label>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                className="flex-1"
+                disabled={exporting}
                 onClick={async () => {
                   setExporting(true)
                   try { await exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy, listPdfIncludeLocation) }
                   finally { setExporting(false); setShowListPdfModal(false) }
                 }}
-                disabled={exporting}
-                style={{ flex: 1, padding: '10px', background: exporting ? '#E0E0E0' : '#424242', color: exporting ? '#999' : '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: exporting ? 'default' : 'pointer' }}
               >
-                {exporting ? 'Generating...' : `Export ${filtered.length} items`}
-              </button>
-              <button onClick={() => setShowListPdfModal(false)} style={{ padding: '10px 16px', background: '#F5F5F5', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#444' }}>
-                Cancel
-              </button>
+                {exporting ? 'Generating…' : `Export ${filtered.length} items`}
+              </Button>
+              <Button variant="ghost" onClick={() => setShowListPdfModal(false)}>Cancel</Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Label export modal */}
       {showLabelModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', width: '400px', maxWidth: '90vw' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1rem', color: '#111' }}>Label Grid PDF</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+          <Card padding="lg" className="w-96 max-w-[90vw]">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Label Grid PDF</h2>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '6px' }}>Labels per row</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="mb-3">
+              <label className="text-xs text-slate-500 block mb-1.5">Labels per row</label>
+              <div className="flex gap-2">
                 {([4, 8] as const).map(n => (
-                  <button key={n} onClick={() => setLabelOptions(o => ({ ...o, perRow: n }))} style={{
-                    flex: 1, padding: '8px', borderRadius: '7px', fontSize: '13px',
-                    fontWeight: 500, cursor: 'pointer', border: 'none',
-                    background: labelOptions.perRow === n ? '#1C1C1E' : '#F5F5F5',
-                    color: labelOptions.perRow === n ? '#fff' : '#444',
-                  }}>
+                  <button
+                    key={n}
+                    onClick={() => setLabelOptions(o => ({ ...o, perRow: n }))}
+                    className={`flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-colors ${
+                      labelOptions.perRow === n
+                        ? 'bg-[var(--color-brand)] text-white'
+                        : 'bg-[var(--color-surface-muted)] text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
                     {n} per row
                   </button>
                 ))}
               </div>
             </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '6px' }}>Sort / group by</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="mb-3">
+              <label className="text-xs text-slate-500 block mb-1.5">Sort / group by</label>
+              <div className="flex gap-2">
                 {(['look', 'productType'] as const).map(g => (
-                  <button key={g} onClick={() => setLabelOptions(o => ({ ...o, groupBy: g }))} style={{
-                    flex: 1, padding: '8px', borderRadius: '7px', fontSize: '12px',
-                    fontWeight: 500, cursor: 'pointer', border: 'none',
-                    background: labelOptions.groupBy === g ? '#1C1C1E' : '#F5F5F5',
-                    color: labelOptions.groupBy === g ? '#fff' : '#444',
-                  }}>
+                  <button
+                    key={g}
+                    onClick={() => setLabelOptions(o => ({ ...o, groupBy: g }))}
+                    className={`flex-1 py-2 rounded-[var(--radius-md)] text-sm font-medium cursor-pointer transition-colors ${
+                      labelOptions.groupBy === g
+                        ? 'bg-[var(--color-brand)] text-white'
+                        : 'bg-[var(--color-surface-muted)] text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
                     {g === 'look' ? 'By Look' : 'By Type'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '8px' }}>Fields to include</label>
+            <div className="mb-4">
+              <label className="text-xs text-slate-500 block mb-2">Fields to include</label>
               {[
                 { key: 'showStyleNumber', label: 'Style Number' },
                 { key: 'showDescription', label: 'Description' },
                 { key: 'showLookNumber', label: 'Look Number' },
                 { key: 'showQRValue', label: 'QR Value (text)' },
               ].map(({ key, label }) => (
-                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer', fontSize: '13px', color: '#444' }}>
-                  <input type="checkbox"
+                <label key={key} className="flex items-center gap-2 mb-1.5 cursor-pointer text-sm text-slate-600">
+                  <input
+                    type="checkbox"
                     checked={(labelOptions as any)[key]}
-                    onChange={e => setLabelOptions(o => ({ ...o, [key]: e.target.checked }))} />
+                    onChange={e => setLabelOptions(o => ({ ...o, [key]: e.target.checked }))}
+                  />
                   {label}
                 </label>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={handleLabelExport} disabled={exporting} style={{
-                flex: 1, padding: '10px', background: exporting ? '#E0E0E0' : '#7B1FA2',
-                color: exporting ? '#999' : '#fff', border: 'none', borderRadius: '8px',
-                fontSize: '13px', fontWeight: 500, cursor: exporting ? 'default' : 'pointer',
-              }}>
-                {exporting ? 'Generating...' : `Export ${filtered.length} labels`}
-              </button>
-              <button onClick={() => setShowLabelModal(false)} style={{
-                padding: '10px 16px', background: '#F5F5F5', border: 'none',
-                borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#444',
-              }}>
-                Cancel
-              </button>
+            <div className="flex gap-2">
+              <Button variant="primary" className="flex-1" disabled={exporting} onClick={handleLabelExport}>
+                {exporting ? 'Generating…' : `Export ${filtered.length} labels`}
+              </Button>
+              <Button variant="ghost" onClick={() => setShowLabelModal(false)}>Cancel</Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>
@@ -468,85 +467,51 @@ function SortableLookGroup({
     transform, transition, isDragging, isOver,
   } = useSortable({ id: lookId })
 
-  // When transform is non-null the element is being moved by dnd-kit.
-  // position:sticky breaks under CSS transform, so switch to relative while animated.
   const isAnimating = !!(transform && (transform.x !== 0 || transform.y !== 0 || transform.scaleX !== 1 || transform.scaleY !== 1))
 
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.4 : 1,
-        // Drop target indicator — 2px line at the top of the hovered row
-        borderTop: isOver && !isDragging ? '2px solid #7B1FA2' : '2px solid transparent',
-      }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      className={isOver && !isDragging ? 'border-t-2 border-[var(--color-accent)]' : 'border-t-2 border-transparent'}
     >
       {/* Group header */}
-      <div style={{
-        padding: '0 4px 0 0',
-        background: '#EDE9FE',
-        fontSize: '12px', fontWeight: 700, color: '#7B1FA2',
-        borderBottom: '1px solid #E0E0E0',
-        position: isAnimating ? 'relative' : 'sticky',
-        top: 0, zIndex: isAnimating ? 0 : 1,
-        display: 'flex', alignItems: 'center',
-        userSelect: 'none',
-      }}>
-        {/* Drag handle — primary affordance, full 44×44 touch target */}
+      <div
+        className={`flex items-center bg-[var(--color-accent)]/10 border-b border-[var(--color-border)] text-xs font-bold text-[var(--color-accent)] select-none pr-1 ${isAnimating ? 'relative' : 'sticky top-0 z-10'}`}
+      >
+        {/* Drag handle */}
         <button
           {...attributes}
           {...listeners}
-          style={{
-            background: 'none', border: 'none',
-            cursor: isDraggingAny ? 'grabbing' : 'grab',
-            color: '#9575CD',
-            fontSize: '18px',
-            minWidth: '44px', minHeight: '44px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-            borderRadius: '4px',
-            lineHeight: 1,
-          }}
+          className={`bg-transparent border-none min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0 rounded text-[var(--color-accent)]/60 hover:bg-[var(--color-accent)]/10 ${isDraggingAny ? 'cursor-grabbing' : 'cursor-grab'}`}
           aria-label={`Drag to reorder ${groupName}`}
           title="Drag to reorder"
         >
-          ≡
+          <DotsSixVertical size={18} />
         </button>
 
-        <span style={{ flex: 1, padding: '8px 0' }}>
+        <span className="flex-1 py-2">
           {groupName} — {itemCount} item{itemCount !== 1 ? 's' : ''}
         </span>
 
-        {/* Up/Down arrows — secondary affordance, muted styling */}
-        <div style={{ display: 'flex', gap: '2px', marginLeft: '4px' }}>
+        {/* Up/Down arrows */}
+        <div className="flex gap-0.5 ml-1">
           <button
             disabled={gi === 0 || isDraggingAny}
             onClick={onMoveUp}
-            style={{
-              padding: '1px 6px', fontSize: '11px',
-              border: '1px solid #C9B8F5', borderRadius: '4px',
-              background: gi > 0 && !isDraggingAny ? '#fff' : 'transparent',
-              color: gi > 0 && !isDraggingAny ? '#7B1FA2' : '#C9B8F5',
-              cursor: gi > 0 && !isDraggingAny ? 'pointer' : 'default',
-              lineHeight: 1.4,
-            }}
+            className="px-1.5 py-0.5 text-xs border border-[var(--color-accent)]/30 rounded text-[var(--color-accent)] bg-white disabled:opacity-30 disabled:cursor-default cursor-pointer leading-tight hover:bg-[var(--color-accent)]/10 disabled:hover:bg-white"
             title="Move up in shooting schedule"
-          >▲</button>
+          >
+            <CaretUp size={10} />
+          </button>
           <button
             disabled={gi === totalLookGroups - 1 || isDraggingAny}
             onClick={onMoveDown}
-            style={{
-              padding: '1px 6px', fontSize: '11px',
-              border: '1px solid #C9B8F5', borderRadius: '4px',
-              background: gi < totalLookGroups - 1 && !isDraggingAny ? '#fff' : 'transparent',
-              color: gi < totalLookGroups - 1 && !isDraggingAny ? '#7B1FA2' : '#C9B8F5',
-              cursor: gi < totalLookGroups - 1 && !isDraggingAny ? 'pointer' : 'default',
-              lineHeight: 1.4,
-            }}
+            className="px-1.5 py-0.5 text-xs border border-[var(--color-accent)]/30 rounded text-[var(--color-accent)] bg-white disabled:opacity-30 disabled:cursor-default cursor-pointer leading-tight hover:bg-[var(--color-accent)]/10 disabled:hover:bg-white"
             title="Move down in shooting schedule"
-          >▼</button>
+          >
+            <CaretDown size={10} />
+          </button>
         </div>
       </div>
 
@@ -555,13 +520,17 @@ function SortableLookGroup({
   )
 }
 
-// ── ShotRow ───────────────────────────────────────────────────────────────────
+// ── CustodyIcon ───────────────────────────────────────────────────────────────
 
-const CUSTODY_ICON: Record<string, string> = {
-  at_client:  'C',
-  in_transit: 'T',
-  at_studio:  'S',
+function CustodyIcon({ location, faded }: { location: string; faded?: boolean }) {
+  const cls = `inline-block flex-shrink-0 ${faded ? 'opacity-40' : 'opacity-80'}`
+  if (location === 'at_client') return <Package size={12} className={cls} />
+  if (location === 'in_transit') return <Truck size={12} className={cls} />
+  if (location === 'at_studio') return <Storefront size={12} className={cls} />
+  return null
 }
+
+// ── ShotRow ───────────────────────────────────────────────────────────────────
 
 function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle, onAngleToggle, onShotStatusChange, onAssignProductType }: {
   item: StockItem
@@ -575,74 +544,78 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
   onAssignProductType: (pt: string) => void
 }) {
   const hasAngles = item.requiredAngles.length > 0
-  const shotBg = item.shotStatus === 'shot' ? '#EDE9FE' : item.shotStatus === 'notRequired' ? '#F5F5F5' : '#FFF3E0'
-  const shotColor = item.shotStatus === 'shot' ? '#7B1FA2' : item.shotStatus === 'notRequired' ? '#999' : '#E65100'
   const angleProgress = hasAngles ? `${item.completedAngles.length}/${item.requiredAngles.length}` : null
   const noAnglesWarning = !hasAngles && item.shotStatus !== 'notRequired'
 
-  return (
-    <div style={{ borderBottom: '1px solid #F0F0F0', background: index % 2 === 0 ? '#fff' : '#FAFAFA' }}>
-      {/* Row header */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', gap: '8px' }} onClick={onToggle}>
-        <span style={{ width: '28px', fontSize: '11px', color: '#999', textAlign: 'center', flexShrink: 0 }}>{index + 1}</span>
+  const statusPill = {
+    shot:        { cls: 'bg-[var(--color-success)]/10 text-[var(--color-success)]',  label: '✓ Shot' },
+    notRequired: { cls: 'bg-slate-100 text-slate-400',                               label: 'N/A' },
+    notShot:     { cls: 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]',  label: 'Not Shot' },
+  }[item.shotStatus] ?? { cls: 'bg-slate-100 text-slate-400', label: item.shotStatus }
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ fontSize: '11px', opacity: locationFilter === 'all' ? 0.4 : 0.9, flexShrink: 0 }}>
-              {CUSTODY_ICON[item.custodyLocation] ?? ''}
-            </span>
+  const selectCls = 'w-full px-2 py-1.5 border border-[var(--color-border)] rounded-[var(--radius-md)] text-sm bg-white text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]'
+
+  return (
+    <div className={`border-b border-[var(--color-border)] ${index % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface-muted)]'}`}>
+      {/* Row header */}
+      <div className="flex items-center px-4 py-2.5 cursor-pointer gap-2" onClick={onToggle}>
+        <span className="w-7 text-xs text-slate-400 text-center flex-shrink-0">{index + 1}</span>
+
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-slate-900 overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-1.5">
+            <CustodyIcon location={item.custodyLocation} faded={locationFilter === 'all'} />
             {item.styleNumber}
           </div>
-          <div style={{ fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div className="text-xs text-slate-400 overflow-hidden text-ellipsis whitespace-nowrap">
             {item.description || item.sku}
-            {item.productType && <span style={{ color: '#1565C0', marginLeft: '6px' }}>· {item.productType}</span>}
+            {item.productType && <span className="text-[var(--color-info)] ml-1.5">· {item.productType}</span>}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
+        <div className="flex gap-1 flex-shrink-0">
           {item.looks.map(l => (
-            <span key={l} style={{ fontSize: '9px', fontWeight: 700, background: '#EDE9FE', color: '#7B1FA2', padding: '2px 5px', borderRadius: '3px' }}>
+            <span key={l} className="text-[9px] font-bold bg-[var(--color-accent)]/10 text-[var(--color-accent)] px-1.5 py-0.5 rounded">
               L{l}
             </span>
           ))}
         </div>
 
         {angleProgress && (
-          <span style={{ fontSize: '11px', color: '#666', flexShrink: 0 }}>{angleProgress}</span>
+          <span className="text-xs text-slate-500 flex-shrink-0">{angleProgress}</span>
         )}
         {noAnglesWarning && (
-          <span style={{ fontSize: '10px', color: '#E65100', background: '#FFF3E0', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>
+          <span className="text-xs text-[var(--color-warning)] bg-[var(--color-warning)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
             No angles
           </span>
         )}
 
-        <div style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '99px', background: shotBg, color: shotColor, flexShrink: 0 }}>
-          {item.shotStatus === 'shot' ? '✓ Shot' : item.shotStatus === 'notRequired' ? 'N/A' : 'Not Shot'}
-        </div>
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${statusPill.cls}`}>
+          {statusPill.label}
+        </span>
 
-        <span style={{ fontSize: '11px', color: '#ccc', flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
+        {expanded ? <CaretUp size={11} className="text-slate-300 flex-shrink-0" /> : <CaretDown size={11} className="text-slate-300 flex-shrink-0" />}
       </div>
 
       {/* Expanded panel */}
       {expanded && (
-        <div style={{ padding: '12px 16px 16px 52px', background: '#F8F8F8', borderTop: '1px solid #F0F0F0' }}>
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+        <div className="px-4 pl-14 pb-4 pt-3 bg-slate-50 border-t border-[var(--color-border)]">
+          <div className="flex gap-4 flex-wrap">
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+            <div className="flex flex-col items-center gap-1">
               <QRCode value={item.qrCodeValue} size={90} />
-              <span style={{ fontSize: '9px', color: '#888', fontFamily: 'monospace', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span className="text-[9px] text-slate-400 font-mono max-w-[90px] overflow-hidden text-ellipsis whitespace-nowrap">
                 {item.qrCodeValue}
               </span>
             </div>
 
-            <div style={{ flex: 1 }}>
+            <div className="flex-1">
               {productTypes.length > 0 && (
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '4px' }}>Product type</label>
+                <div className="mb-2.5">
+                  <label className="text-xs text-slate-400 block mb-1">Product type</label>
                   <select
                     value={item.productType ?? ''}
                     onChange={e => { e.stopPropagation(); onAssignProductType(e.target.value) }}
-                    style={{ padding: '5px 8px', border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '12px', width: '100%' }}
+                    className={selectCls}
                   >
                     <option value="">— not assigned —</option>
                     {productTypes.map(pt => <option key={pt} value={pt}>{pt}</option>)}
@@ -651,19 +624,21 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
               )}
 
               {hasAngles ? (
-                <div style={{ marginBottom: '10px' }}>
-                  <p style={{ fontSize: '10px', color: '#888', marginBottom: '6px' }}>Tap angles to mark done:</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <div className="mb-2.5">
+                  <p className="text-xs text-slate-400 mb-1.5">Tap angles to mark done:</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {item.requiredAngles.map(angle => {
                       const done = item.completedAngles.includes(angle)
                       return (
-                        <button key={angle} onClick={(e) => { e.stopPropagation(); onAngleToggle(angle) }} style={{
-                          padding: '5px 12px', borderRadius: '99px', fontSize: '12px',
-                          fontWeight: 600, cursor: 'pointer', border: 'none',
-                          background: done ? '#7B1FA2' : '#F0F0F0',
-                          color: done ? '#fff' : '#666',
-                          transition: 'all 0.15s',
-                        }}>
+                        <button
+                          key={angle}
+                          onClick={e => { e.stopPropagation(); onAngleToggle(angle) }}
+                          className={`px-3 py-1 rounded-full text-sm font-semibold cursor-pointer border-none transition-colors ${
+                            done
+                              ? 'bg-[var(--color-accent)] text-white'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
                           {done ? '✓ ' : ''}{angle}
                         </button>
                       )
@@ -671,22 +646,24 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
                   </div>
                 </div>
               ) : (
-                <p style={{ fontSize: '11px', color: '#999', marginBottom: '10px' }}>
+                <p className="text-xs text-slate-400 mb-2.5">
                   {productTypes.length > 0
                     ? 'Assign a product type above to load required angles.'
                     : 'No required angles. Set up a client template to track angles.'}
                 </p>
               )}
 
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div className="flex gap-1.5">
                 {(['notShot', 'shot', 'notRequired'] as const).map(s => (
-                  <button key={s} onClick={(e) => { e.stopPropagation(); onShotStatusChange(s) }} style={{
-                    padding: '5px 10px', borderRadius: '6px', fontSize: '11px',
-                    fontWeight: 500, cursor: 'pointer',
-                    border: item.shotStatus === s ? 'none' : '1px solid #E0E0E0',
-                    background: item.shotStatus === s ? '#1C1C1E' : '#fff',
-                    color: item.shotStatus === s ? '#fff' : '#444',
-                  }}>
+                  <button
+                    key={s}
+                    onClick={e => { e.stopPropagation(); onShotStatusChange(s) }}
+                    className={`px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-colors ${
+                      item.shotStatus === s
+                        ? 'bg-[var(--color-brand)] text-white border-none'
+                        : 'border border-[var(--color-border)] bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
                     {s === 'notShot' ? 'Not Shot' : s === 'shot' ? '✓ Shot' : 'N/A'}
                   </button>
                 ))}
