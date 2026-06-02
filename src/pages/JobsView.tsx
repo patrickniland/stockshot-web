@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FolderOpen, Buildings, CaretDown, CaretRight, ArrowDown, Trash } from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
 import { Shoot } from '../types'
+import { Button } from '../components/ui/Button'
 
 export default function JobsView() {
   useNavSync({ onEnter: 'pull' })
@@ -20,7 +22,7 @@ export default function JobsView() {
   const getActiveShoots = useAppStore(s => s.getActiveShoots)
   const renameActiveShoot = useAppStore(s => s.renameActiveShoot)
   const clientName = useAppStore(s => s.clientName)
-  
+
   // Hide empty Unassigned shoots — they're system-managed holding areas, not real jobs.
   // Unassigned shoots with items remain visible so nothing is lost.
   const activeShoots = getActiveShoots().filter(s => !s.isUnassigned || s.items.length > 0)
@@ -35,138 +37,127 @@ export default function JobsView() {
 
   if (activeShoots.length === 0) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p style={{ fontSize: '40px', marginBottom: '12px' }}>📁</p>
-        <p style={{ fontWeight: 500, color: '#111', marginBottom: '6px' }}>No shoots yet</p>
-        <p style={{ fontSize: '12px', color: '#666', marginBottom: '16px' }}>Import a stock file to create your first shoot.</p>
-        <button onClick={() => navigate('/import')} style={{
-          padding: '10px 20px', background: '#1C1C1E', color: '#fff',
-          border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
-        }}>
+      <div className="p-8 text-center">
+        <FolderOpen size={48} weight="duotone" className="mx-auto mb-3 text-neutral-400" />
+        <p className="font-medium text-neutral-900 mb-1.5">No shoots yet</p>
+        <p className="text-[12px] text-neutral-500 mb-4">Import a stock file to create your first shoot.</p>
+        <Button variant="primary" size="md" onClick={() => navigate('/import')}>
           Go to Import
-        </button>
+        </Button>
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', gap: '12px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#111', margin: 0 }}>Shoots</h1>
-        <span style={{ fontSize: '13px', color: '#666' }}>({activeShoots.length})</span>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => navigate('/import')} style={{
-          padding: '8px 16px', background: '#1C1C1E', color: '#fff',
-          border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 500,
-        }}>
+    <div className="p-6">
+      <div className="flex items-center mb-6 gap-3">
+        <h1 className="text-[22px] font-semibold text-neutral-900 m-0">Shoots</h1>
+        <span className="text-[13px] text-neutral-500">({activeShoots.length})</span>
+        <div className="flex-1" />
+        <Button variant="primary" size="sm" onClick={() => navigate('/import')}>
           + New Import
-        </button>
+        </Button>
       </div>
 
       {Object.entries(grouped).map(([client, shoots]) => (
-        <div key={client} style={{ marginBottom: '1.5rem' }}>
+        <div key={client} className="mb-6">
           {/* Client header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', paddingLeft: '4px' }}>
-            <span style={{ fontSize: '11px' }}>🏢</span>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#1565C0' }}>{client}</span>
-            <span style={{ fontSize: '11px', color: '#888' }}>· {shoots.length} shoot{shoots.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-2 mb-2 pl-1">
+            <Buildings size={14} className="text-[var(--color-info)]" />
+            <span className="text-[12px] font-bold text-[var(--color-info)]">{client}</span>
+            <span className="text-[11px] text-neutral-400">· {shoots.length} shoot{shoots.length !== 1 ? 's' : ''}</span>
           </div>
 
           {shoots.map(shoot => {
             const isActive = shoot.id === activeShootId
             const showDrops = expandedDrops === shoot.id
-            const mapped     = shoot.items.filter(i => (i.custodyHistory ?? []).length === 0).length
-            const active     = shoot.items.filter(i => (i.custodyHistory ?? []).length > 0).length
-            const atStudio   = shoot.items.filter(i => i.custodyLocation === 'at_studio').length
-            const atClient   = shoot.items.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
+            const mapped      = shoot.items.filter(i => (i.custodyHistory ?? []).length === 0).length
+            const active      = shoot.items.filter(i => (i.custodyHistory ?? []).length > 0).length
+            const atStudio    = shoot.items.filter(i => i.custodyLocation === 'at_studio').length
+            const atClient    = shoot.items.filter(i => i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0).length
             const notRequired = shoot.items.filter(i => i.shotStatus === 'notRequired').length
-            const shotCount  = shoot.items.filter(i => i.shotStatus === 'shot').length
-            const shotBase   = active - notRequired
+            const shotCount   = shoot.items.filter(i => i.shotStatus === 'shot').length
+            const shotBase    = active - notRequired
 
             return (
-              <div key={shoot.id}
+              <div
+                key={shoot.id}
                 onClick={() => { if (!isActive) switchToShoot(shoot) }}
-                style={{
-                  background: '#fff',
-                  border: `${isActive ? 1.5 : 1}px solid ${isActive ? '#2E7D32' : '#E0E0E0'}`,
-                  borderRadius: '10px',
-                  marginBottom: '8px',
-                  overflow: 'hidden',
-                  cursor: isActive ? 'default' : 'pointer',
-                  transition: 'box-shadow 0.15s',
-                }}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
+                className={`bg-white rounded-[var(--radius-lg)] mb-2 overflow-hidden transition-shadow ${
+                  isActive
+                    ? 'border-2 border-[var(--color-success)] cursor-default'
+                    : 'border border-[var(--color-border)] cursor-pointer hover:shadow-md'
+                }`}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', padding: '16px', gap: '12px' }}>
-                  {/* Active indicator */}
-                  <div style={{ width: '4px', alignSelf: 'stretch', background: isActive ? '#2E7D32' : '#E0E0E0', borderRadius: '2px', flexShrink: 0 }} />
+                <div className="flex items-start p-4 gap-3">
+                  {/* Active indicator bar */}
+                  <div className={`w-1 self-stretch rounded-full shrink-0 ${isActive ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'}`} />
 
-                  <div style={{ flex: 1 }}>
+                  <div className="flex-1">
                     {/* Name row */}
                     {editingId === shoot.id ? (
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                        <input value={editingName} onChange={e => setEditingName(e.target.value)}
-                          style={{ flex: 1, padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '14px' }} />
-                        <button onClick={() => { renameActiveShoot(editingName); setEditingId(null) }}
-                          style={{ padding: '6px 12px', background: '#2E7D32', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
+                          className="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-md text-[14px]"
+                        />
+                        <Button variant="primary" size="sm" onClick={() => { renameActiveShoot(editingName); setEditingId(null) }}>
                           Save
-                        </button>
-                        <button onClick={() => setEditingId(null)}
-                          style={{ padding: '6px 12px', background: '#F5F5F5', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#666' }}>
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => setEditingId(null)}>
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#111' }}>{shoot.name}</span>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[14px] font-semibold text-neutral-900">{shoot.name}</span>
                         {isActive && (
-                          <span style={{ fontSize: '9px', fontWeight: 700, color: '#2E7D32', background: '#E8F5E9', padding: '2px 6px', borderRadius: '4px' }}>
+                          <span className="text-[9px] font-bold text-[var(--color-success)] bg-[var(--color-success)]/10 px-1.5 py-0.5 rounded">
                             ACTIVE
                           </span>
                         )}
                       </div>
                     )}
 
-                    <div style={{ fontSize: '11px', color: '#888', marginBottom: '10px' }}>
+                    <div className="text-[11px] text-neutral-400 mb-2.5">
                       Created {new Date(shoot.createdAt).toLocaleDateString('en-ZA')} · Updated {new Date(shoot.updatedAt).toLocaleDateString('en-ZA')}
                     </div>
 
                     {/* Stats */}
-                    <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: shoot.drops.length > 0 ? '8px' : 0 }}>
-                      <StatChip value={mapped}   label="Mapped"    color="#999"    />
-                      <StatChip value={active}   label="Active"    color="#2E7D32" />
-                      <StatChip value={atStudio} label="At Studio" color="#1565C0" />
-                      <StatChip value={atClient} label="At Client" color="#E65100" />
-                      <StatChip value={`${shotCount}/${shotBase}`} label="Shot" color="#7B1FA2" />
-                      <StatChip value={shoot.drops.length} label={`Drop${shoot.drops.length !== 1 ? 's' : ''}`} color="#666" />
+                    <div className={`flex gap-3.5 flex-wrap ${shoot.drops.length > 0 ? 'mb-2' : ''}`}>
+                      <StatChip value={mapped}                        label="Mapped"    colorClass="text-neutral-400" />
+                      <StatChip value={active}                        label="Active"    colorClass="text-[var(--color-success)]" />
+                      <StatChip value={atStudio}                      label="At Studio" colorClass="text-[var(--color-info)]" />
+                      <StatChip value={atClient}                      label="At Client" colorClass="text-[var(--color-warning)]" />
+                      <StatChip value={`${shotCount}/${shotBase}`}    label="Shot"      colorClass="text-[var(--color-accent)]" />
+                      <StatChip value={shoot.drops.length}            label={`Drop${shoot.drops.length !== 1 ? 's' : ''}`} colorClass="text-neutral-500" />
                     </div>
 
                     {/* Drops toggle */}
                     {shoot.drops.length > 0 && (
-                      <button onClick={() => setExpandedDrops(showDrops ? null : shoot.id)}
-                        style={{ background: 'none', border: 'none', fontSize: '10px', color: '#1565C0', cursor: 'pointer', padding: 0, marginBottom: showDrops ? '8px' : 0 }}>
-                        {showDrops ? '▾ Hide drops' : `▸ Show ${shoot.drops.length} drop${shoot.drops.length !== 1 ? 's' : ''}`}
+                      <button
+                        onClick={e => { e.stopPropagation(); setExpandedDrops(showDrops ? null : shoot.id) }}
+                        className={`flex items-center gap-1 bg-transparent border-none text-[10px] text-[var(--color-info)] cursor-pointer p-0 ${showDrops ? 'mb-2' : ''}`}
+                      >
+                        {showDrops ? <CaretDown size={10} /> : <CaretRight size={10} />}
+                        {showDrops ? 'Hide drops' : `Show ${shoot.drops.length} drop${shoot.drops.length !== 1 ? 's' : ''}`}
                       </button>
                     )}
 
                     {/* Drops list */}
                     {showDrops && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="flex flex-col gap-1">
                         {shoot.drops.map(drop => (
-                          <div key={drop.id} style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            background: '#F8F8F8', borderRadius: '5px', padding: '5px 8px',
-                            fontSize: '10px', color: '#666',
-                          }}>
-                            <span>⬇</span>
-                            <span style={{ fontWeight: 500, color: '#444' }}>{drop.name}</span>
+                          <div key={drop.id} className="flex items-center gap-1.5 bg-[var(--color-surface-muted)] rounded-md px-2 py-1.5 text-[10px] text-neutral-500">
+                            <ArrowDown size={10} className="shrink-0" />
+                            <span className="font-medium text-neutral-700">{drop.name}</span>
                             <span>·</span>
-                            <span style={{
-                              background: drop.importMode === 'jobList' ? '#E8F5E9' : '#E3F2FD',
-                              color: drop.importMode === 'jobList' ? '#2E7D32' : '#1565C0',
-                              padding: '1px 5px', borderRadius: '3px', fontSize: '9px', fontWeight: 700,
-                            }}>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              drop.importMode === 'jobList'
+                                ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                                : 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
+                            }`}>
                               {drop.importMode === 'jobList' ? 'Job List' : 'Reference'}
                             </span>
                             <span>·</span>
@@ -180,21 +171,25 @@ export default function JobsView() {
                   </div>
 
                   {/* Actions */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+                  <div className="flex flex-col gap-1.5 shrink-0">
                     {!isActive && (
-                      <button onClick={() => switchToShoot(shoot)}
-                        style={{ padding: '6px 12px', background: '#1565C0', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}>
+                      <Button variant="primary" size="sm" onClick={e => { e.stopPropagation(); switchToShoot(shoot) }}>
                         Switch
-                      </button>
+                      </Button>
                     )}
-                    <button onClick={() => { setEditingId(shoot.id); setEditingName(shoot.name) }}
-                      style={{ padding: '6px 12px', background: '#F5F5F5', border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#444' }}>
+                    <Button variant="secondary" size="sm" onClick={e => { e.stopPropagation(); setEditingId(shoot.id); setEditingName(shoot.name) }}>
                       Rename
-                    </button>
-                    <button onClick={() => { if (confirm(`Move "${shoot.name}" to trash?\n\n${shoot.items.length} items will be recoverable for 30 days.`)) softDeleteShoot(shoot) }}
-                      style={{ padding: '6px 12px', background: '#fff', border: '1px solid #FFCDD2', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#B71C1C' }}>
-                      🗑 Trash
-                    </button>
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (confirm(`Move "${shoot.name}" to trash?\n\n${shoot.items.length} items will be recoverable for 30 days.`)) softDeleteShoot(shoot)
+                      }}
+                    >
+                      <Trash size={12} className="mr-1" /> Trash
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -202,16 +197,15 @@ export default function JobsView() {
           })}
         </div>
       ))}
-
     </div>
   )
 }
 
-function StatChip({ value, label, color }: { value: string | number; label: string; color: string }) {
+function StatChip({ value, label, colorClass }: { value: string | number; label: string; colorClass: string }) {
   return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: '13px', fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: '9px', color: '#888' }}>{label}</div>
+    <div className="text-center">
+      <div className={`text-[13px] font-bold ${colorClass}`}>{value}</div>
+      <div className="text-[9px] text-neutral-400">{label}</div>
     </div>
   )
 }
