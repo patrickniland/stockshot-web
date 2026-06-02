@@ -89,7 +89,7 @@ export default function JobsView() {
                     : 'border border-[var(--color-border)] cursor-pointer hover:shadow-md'
                 }`}
               >
-                <div className="flex items-start p-4 gap-3">
+                <div className="flex flex-wrap items-start p-4 gap-3">
                   {/* Active indicator bar */}
                   <div className={`w-1 self-stretch rounded-full shrink-0 ${isActive ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'}`} />
 
@@ -171,7 +171,7 @@ export default function JobsView() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex flex-col gap-1.5 shrink-0">
+                  <div className="flex flex-row flex-wrap lg:flex-col gap-1.5 shrink-0 w-full lg:w-auto">
                     {!isActive && (
                       <Button variant="primary" size="sm" onClick={e => { e.stopPropagation(); switchToShoot(shoot) }}>
                         Switch
