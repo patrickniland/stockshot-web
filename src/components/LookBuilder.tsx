@@ -2,8 +2,10 @@
 // Slide-out panel from Shot List for managing item look assignments
 
 import { useState } from 'react'
+import { MagnifyingGlass, X } from '@phosphor-icons/react'
 import { StockItem } from '../types'
 import { useNavSync } from '../hooks/useNavSync'
+import { Button } from './ui/Button'
 
 interface Props {
   items: StockItem[]
@@ -124,20 +126,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
   return (
     <>
       {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }}
-      />
+      <div onClick={onClose} className="fixed inset-0 bg-black/30 z-[200]" />
 
       {/* Panel */}
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: '420px', maxWidth: '95vw',
-        background: '#fff', zIndex: 201,
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
-        animation: 'slideIn 0.2s ease',
-      }}>
+      <div className="fixed top-0 right-0 bottom-0 w-[420px] max-w-[95vw] bg-[var(--color-surface)] z-[201] flex flex-col shadow-[-4px_0_24px_rgba(0,0,0,0.15)] [animation:slideIn_0.2s_ease]">
         <style>{`
           @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
@@ -146,56 +138,52 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
         `}</style>
 
         {/* Header */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E0E0E0', background: '#1C1C1E', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Look Builder</div>
-            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+        <div className="px-5 py-4 border-b border-[var(--color-border)] bg-[var(--color-brand)] flex items-center gap-3">
+          <div className="flex-1">
+            <div className="text-[15px] font-bold text-white">Look Builder</div>
+            <div className="text-[11px] text-neutral-400 mt-0.5">
               {items.length} items · {allLooks.length} look{allLooks.length !== 1 ? 's' : ''}
             </div>
           </div>
-          <button onClick={onAddLook} style={{
-            background: '#EDE9FE', color: '#7B1FA2', border: 'none',
-            padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
-            cursor: 'pointer', fontWeight: 600,
-          }}>
-            + New Look
-          </button>
-          <button onClick={onClose} style={{
-            background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff',
-            padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer',
-          }}>
-            ✕
+          <Button variant="secondary" size="sm" onClick={onAddLook}>+ New Look</Button>
+          <button
+            onClick={onClose}
+            className="bg-white/10 border-none text-white px-3 py-1.5 rounded-md cursor-pointer hover:bg-white/20 transition-colors flex items-center"
+          >
+            <X size={14} />
           </button>
         </div>
 
         {/* Location filter pills */}
-        <div style={{ padding: '8px 20px', borderBottom: '0.5px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', marginRight: '2px' }}>Location:</span>
+        <div className="px-5 py-2 border-b border-[var(--color-border)]/50 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-semibold text-neutral-500 mr-0.5">Location:</span>
           {([
             { value: 'all',        label: 'All' },
             { value: 'at_studio',  label: 'At Studio' },
             { value: 'at_client',  label: 'At Client' },
             { value: 'in_transit', label: 'In Transit' },
           ] as const).map(opt => (
-            <button key={opt.value} onClick={() => setLocationFilter(opt.value)} style={{
-              padding: '4px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
-              border: `1.5px solid ${locationFilter === opt.value ? '#1565C0' : '#E0E0E0'}`,
-              background: locationFilter === opt.value ? '#E3F2FD' : '#F9F9F9',
-              color: locationFilter === opt.value ? '#1565C0' : '#666',
-              cursor: 'pointer',
-            }}>
+            <button
+              key={opt.value}
+              onClick={() => setLocationFilter(opt.value)}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
+                locationFilter === opt.value
+                  ? 'border-[var(--color-info)] bg-[var(--color-info)]/10 text-[var(--color-info)]'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-neutral-500'
+              }`}
+            >
               {opt.label}
             </button>
           ))}
         </div>
 
         {/* Look filter dropdown */}
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '12px', color: '#666', flexShrink: 0 }}>Filter by Look:</span>
+        <div className="px-5 py-2.5 border-b border-[var(--color-border)] flex items-center gap-2.5">
+          <span className="text-[12px] text-neutral-500 shrink-0">Filter by Look:</span>
           <select
             value={filterLook}
             onChange={e => { setFilterLook(e.target.value); setSelectedIds(new Set()) }}
-            style={{ flex: 1, padding: '6px 10px', border: '1px solid #E0E0E0', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
+            className="flex-1 px-2.5 py-1.5 border border-[var(--color-border)] rounded-lg text-[13px] cursor-pointer bg-white"
           >
             <option value="all">All Looks ({items.length} items)</option>
             <option value="none">No Look Assigned ({items.filter(i => i.looks.length === 0).length} items)</option>
@@ -205,67 +193,67 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
             })}
           </select>
           {filterLook !== 'all' && (
-            <button onClick={() => setFilterLook('all')} style={{
-              background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '18px', flexShrink: 0,
-            }}>✕</button>
+            <button
+              onClick={() => setFilterLook('all')}
+              className="bg-transparent border-none text-neutral-400 cursor-pointer shrink-0 flex items-center hover:text-neutral-600"
+            >
+              <X size={16} />
+            </button>
           )}
         </div>
 
         {/* Bulk action bar */}
         {selectedIds.size > 0 && (
-          <div style={{ padding: '10px 20px', background: '#E3F2FD', borderBottom: '1px solid #BBDEFB', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1565C0' }}>
+          <div className="px-5 py-2.5 bg-[var(--color-info)]/10 border-b border-[var(--color-info)]/30 flex items-center gap-2 flex-wrap">
+            <span className="text-[12px] font-semibold text-[var(--color-info)]">
               {selectedIds.size} selected
             </span>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div className="flex gap-1.5">
               {(['add', 'move', 'remove'] as const).map(a => (
-                <button key={a} onClick={() => setBulkAction(a)} style={{
-                  padding: '4px 10px', borderRadius: '5px', fontSize: '11px',
-                  fontWeight: 500, cursor: 'pointer', border: 'none',
-                  background: bulkAction === a ? '#1565C0' : '#fff',
-                  color: bulkAction === a ? '#fff' : '#444',
-                }}>
+                <button
+                  key={a}
+                  onClick={() => setBulkAction(a)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer border-none transition-colors ${
+                    bulkAction === a
+                      ? 'bg-[var(--color-info)] text-white'
+                      : 'bg-white text-neutral-500'
+                  }`}
+                >
                   {a === 'add' ? 'Add to' : a === 'move' ? 'Move to' : 'Remove from'}
                 </button>
               ))}
             </div>
-            <select value={bulkLook} onChange={e => setBulkLook(e.target.value)}
-              style={{ padding: '4px 8px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px', flex: 1 }}>
+            <select
+              value={bulkLook}
+              onChange={e => setBulkLook(e.target.value)}
+              className="px-2 py-1 border border-[var(--color-info)]/30 rounded-md text-[12px] flex-1 bg-white"
+            >
               <option value="">Select look...</option>
               {allLooks.map(l => <option key={l} value={l}>Look {l}</option>)}
               {bulkAction !== 'remove' && <option value="new">+ New Look</option>}
             </select>
-            <span style={{ fontSize: '11px', color: '#888' }}>or</span>
+            <span className="text-[11px] text-neutral-400">or</span>
             <input
               type="number" min="1" placeholder="#"
               onChange={e => e.target.value ? setBulkLook(e.target.value) : setBulkLook('')}
-              style={{ width: '48px', padding: '4px 6px', border: '1px solid #BBDEFB', borderRadius: '5px', fontSize: '12px' }}
+              className="w-12 px-1.5 py-1 border border-[var(--color-info)]/30 rounded-md text-[12px]"
             />
-            <button onClick={applyBulkAction} disabled={!bulkLook} style={{
-              padding: '5px 12px', background: bulkLook ? '#1565C0' : '#E0E0E0',
-              color: bulkLook ? '#fff' : '#999', border: 'none',
-              borderRadius: '5px', fontSize: '12px', cursor: bulkLook ? 'pointer' : 'default',
-              fontWeight: 500,
-            }}>
-              Apply
-            </button>
-            <button onClick={() => setSelectedIds(new Set())} style={{
-              background: 'none', border: 'none', fontSize: '12px', color: '#666', cursor: 'pointer',
-            }}>
-              Clear
-            </button>
+            <Button variant="primary" size="sm" onClick={applyBulkAction} disabled={!bulkLook}>Apply</Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>Clear</Button>
           </div>
         )}
 
         {/* Extra field filters */}
         {hasExtraFields && (
-          <div style={{ padding: '8px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '11px', color: '#666', flexShrink: 0 }}>Filter by:</span>
+          <div className="px-5 py-2 border-b border-[var(--color-border)] flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-neutral-500 shrink-0">Filter by:</span>
             {Object.entries(extraFieldOptions).map(([key, values]) => (
-              <select key={key}
+              <select
+                key={key}
                 value={extraFieldFilter.startsWith(key + ':') ? extraFieldFilter : ''}
                 onChange={e => setExtraFieldFilter(e.target.value)}
-                style={{ padding: '4px 8px', border: '1px solid #E0E0E0', borderRadius: '5px', fontSize: '11px', cursor: 'pointer' }}>
+                className="px-2 py-1 border border-[var(--color-border)] rounded-md text-[11px] cursor-pointer bg-white"
+              >
                 <option value="">{key} (all)</option>
                 {[...values].sort().map(v => (
                   <option key={v} value={`${key}:${v}`}>{v}</option>
@@ -273,88 +261,95 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
               </select>
             ))}
             {extraFieldFilter && (
-              <button onClick={() => setExtraFieldFilter('')} style={{
-                background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '12px'
-              }}>✕ Clear</button>
+              <button
+                onClick={() => setExtraFieldFilter('')}
+                className="bg-transparent border-none text-neutral-400 cursor-pointer text-[12px] flex items-center gap-0.5 hover:text-neutral-600"
+              >
+                <X size={12} /> Clear
+              </button>
             )}
           </div>
         )}
 
         {/* Search */}
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid #F0F0F0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F5F5F5', borderRadius: '7px', padding: '7px 12px' }}>
-            <span style={{ fontSize: '12px', color: '#888' }}>🔍</span>
-            <input value={search} onChange={e => setSearch(e.target.value)}
+        <div className="px-5 py-2.5 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2 bg-[var(--color-surface-muted)] rounded-lg px-3 py-1.5">
+            <MagnifyingGlass size={14} className="text-neutral-400 shrink-0" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
               placeholder="Search items..."
-              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', flex: 1 }} />
+              className="border-none bg-transparent outline-none text-[13px] flex-1"
+            />
           </div>
         </div>
 
         {/* Column headers */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 20px', background: '#F9F9F9', borderBottom: '1px solid #F0F0F0', gap: '10px' }}>
-          <input type="checkbox"
+        <div className="flex items-center px-5 py-1.5 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] gap-2.5">
+          <input
+            type="checkbox"
             checked={selectedIds.size === filtered.length && filtered.length > 0}
-            onChange={selectAll} />
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', flex: 1 }}>Item</span>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', width: '140px' }}>Looks</span>
+            onChange={selectAll}
+          />
+          <span className="text-[11px] font-semibold text-neutral-500 flex-1">Item</span>
+          <span className="text-[11px] font-semibold text-neutral-500 w-40">Looks</span>
         </div>
 
         {/* Item list */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 && locationFilter !== 'all' && (
-            <div style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
+            <div className="p-8 text-center">
+              <div className="text-[13px] text-neutral-500 mb-2">
                 {items.some(i => i.custodyLocation === locationFilter)
                   ? 'No items here match the current filters.'
                   : locationFilter === 'at_studio' ? 'No items have been scanned to studio yet.'
                   : locationFilter === 'at_client' ? 'No items are currently at client.'
                   : 'No items are currently in transit.'}
               </div>
-              <button onClick={() => setLocationFilter('all')} style={{
-                padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                background: '#F5F5F5', border: '1px solid #E0E0E0', color: '#444', cursor: 'pointer',
-              }}>
+              <Button variant="secondary" size="sm" onClick={() => setLocationFilter('all')}>
                 Show all items
-              </button>
+              </Button>
             </div>
           )}
           {filtered.map((item, i) => (
-            <div key={item.id} style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '10px 20px',
-              borderBottom: '1px solid #F5F5F5',
-              background: selectedIds.has(item.id) ? '#EEF6FF' : i % 2 === 0 ? '#fff' : '#FAFAFA',
-            }}>
-              <input type="checkbox" checked={selectedIds.has(item.id)}
-                onChange={() => toggleSelect(item.id)} style={{ flexShrink: 0 }} />
+            <div
+              key={item.id}
+              className={`flex items-center gap-2.5 px-5 py-2.5 border-b border-[var(--color-border)]/50 ${
+                selectedIds.has(item.id)
+                  ? 'bg-[var(--color-info)]/10'
+                  : i % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface-muted)]'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.has(item.id)}
+                onChange={() => toggleSelect(item.id)}
+                className="shrink-0"
+              />
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-neutral-900 truncate">
                   {item.styleNumber}
                 </div>
-                <div style={{ fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="text-[10px] text-neutral-400 truncate">
                   {item.description || item.sku}
                 </div>
               </div>
 
               {/* Look pills + controls */}
-              <div style={{ width: '160px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+              <div className="w-40 flex flex-wrap gap-1 items-center">
                 {item.looks.sort((a, b) => a - b).map(look => (
-                  <div key={look} style={{
-                    display: 'flex', alignItems: 'center', gap: '2px',
-                    background: '#EDE9FE', borderRadius: '4px',
-                    padding: '2px 4px 2px 7px',
-                  }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#7B1FA2' }}>L{look}</span>
+                  <div
+                    key={look}
+                    className="flex items-center gap-0.5 bg-[var(--color-accent)]/10 rounded px-1.5 py-0.5"
+                  >
+                    <span className="text-[10px] font-bold text-[var(--color-accent)]">L{look}</span>
                     <button
                       onClick={() => removeLookFromItem(item, look)}
                       title={`Remove from Look ${look}`}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#7B1FA2',
-                        fontSize: '11px', padding: '0 2px', lineHeight: 1,
-                      }}>
-                      ✕
+                      className="bg-transparent border-none cursor-pointer text-[var(--color-accent)] px-0.5 leading-none flex items-center hover:opacity-70"
+                    >
+                      <X size={10} />
                     </button>
                   </div>
                 ))}
@@ -371,11 +366,8 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
                     }
                     e.target.value = ''
                   }}
-                  style={{
-                    fontSize: '10px', padding: '2px 4px', border: '1px dashed #ccc',
-                    borderRadius: '4px', color: '#888', background: '#fff', cursor: 'pointer',
-                    maxWidth: '80px',
-                  }}>
+                  className="text-[10px] px-1 py-0.5 border border-dashed border-[var(--color-border)] rounded text-neutral-400 bg-white cursor-pointer max-w-[80px]"
+                >
                   <option value="">+ Look</option>
                   {allLooks.filter(l => !item.looks.includes(l)).length > 0 && (
                     <optgroup label="Add to">
@@ -398,11 +390,10 @@ export default function LookBuilder({ items, lookOrder, onUpdateItem, onAddLook,
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #E0E0E0', background: '#F9F9F9', fontSize: '11px', color: '#888', textAlign: 'center' }}>
-          Tap ✕ on a look pill to remove · Use "+ Look" to add · Select items for bulk add / move / remove
+        <div className="px-5 py-3 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[11px] text-neutral-400 text-center">
+          Tap × on a look pill to remove · Use "+ Look" to add · Select items for bulk add / move / remove
         </div>
       </div>
     </>
   )
 }
-
