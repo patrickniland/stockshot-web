@@ -1,11 +1,106 @@
 // StockShot — PDF Exporter
-// Supports list print and label grid (4 or 8 per row) with QR codes
+// Supports stock list, shot list, and label grid (4 or 8 per row) with QR codes
 
 import { StockItem } from '../types'
 import { generateQRDataURL } from './qrGenerator'
 
+// ── Design system ─────────────────────────────────────────────────────────────
+// Helvetica is used for all PDF text (not Inter) because jsPDF font embedding
+// requires the full font as a base64 blob (~300 KB for Inter Regular alone),
+// which would significantly inflate the bundle. Revisit if a build plugin or
+// separate font data file is added.
+
+const PDF_COLORS = {
+  brand:           '#1C1C1E',
+  accent:          '#7C3AED',
+  accentBg:        '#F5F3FF',
+  border:          '#E5E7EB',
+  textMuted:       '#6B7280',
+  textBody:        '#1C1C1E',
+  rowAltBg:        '#F9FAFB',
+  statusAtClient:  '#E65100',
+  statusAtStudio:  '#2E7D32',
+  statusInTransit: '#1565C0',
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function today(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+    || 'untitled'
+  )
+}
+
+/** Truncate at the last word boundary within maxChars, appending '…' on overflow. */
+function wordTruncate(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  const cut = text.slice(0, maxChars)
+  const lastSpace = cut.lastIndexOf(' ')
+  return (lastSpace > 1 ? cut.slice(0, lastSpace) : cut) + '…'
+}
+
+/**
+ * Return the first line of splitTextToSize output, appending '…' if the text
+ * wrapped to more than one line. Ensures word-boundary truncation at the
+ * exact rendered column width rather than a rough char-count estimate.
+ */
+function firstLineOf(doc: any, text: string, maxWidthMm: number): string {
+  if (!text) return '—'
+  const lines: string[] = doc.splitTextToSize(text, maxWidthMm)
+  if (lines.length <= 1) return lines[0] ?? text
+  return lines[0].replace(/\s+$/, '') + '…'
+}
+
+// ── Page header strip ─────────────────────────────────────────────────────────
+
+const HDR_H      = 10  // mm — page header band height
+const HDR_BELOW  = 5   // mm — gap below header before content starts
+const CONTENT_TOP = HDR_H + HDR_BELOW  // 15 mm
+
+function _drawPageHeader(
+  doc: any,
+  shootName: string,
+  pageNum: number,
+  totalPages: number,
+  pageW: number,
+  margin: number,
+): void {
+  doc.setDrawColor(PDF_COLORS.border)
+  doc.setLineWidth(0.5)
+  doc.line(0, HDR_H, pageW, HDR_H)
+
+  const baseY = HDR_H * 0.65  // baseline roughly centred in the 10mm strip
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(PDF_COLORS.textBody)
+  doc.text(shootName || 'Untitled Shoot', margin, baseY)
+
+  doc.setFontSize(7)
+  doc.setTextColor(PDF_COLORS.textMuted)
+  doc.text('StockShot', pageW / 2, baseY, { align: 'center' })
+  doc.text(`${today()}   Page ${pageNum} of ${totalPages}`, pageW - margin, baseY, { align: 'right' })
+
+  doc.setTextColor(PDF_COLORS.textBody)
+}
+
+/** Post-process: stamps the header strip on every page once total count is known. */
+function addPageHeaders(doc: any, shootName: string, pageW: number, margin: number): void {
+  const total = doc.getNumberOfPages()
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p)
+    _drawPageHeader(doc, shootName, p, total, pageW, margin)
+  }
 }
 
 // ── Missing items PDF ─────────────────────────────────────────────────────────
@@ -43,39 +138,151 @@ export async function exportMissingItemsPDF(items: StockItem[]): Promise<void> {
 }
 
 // ── Stock list PDF ────────────────────────────────────────────────────────────
+// Columns: # | Style / SKU (stacked) | Description (wide) | Looks | Custody | Shot
 
-export async function exportStockListPDF(items: StockItem[]): Promise<void> {
+export async function exportStockListPDF(
+  items: StockItem[],
+  shootName = '',
+): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
 
-  doc.setFontSize(16)
-  doc.text('StockShot — Stock List', 14, 20)
-  doc.setFontSize(10)
-  doc.text(`Generated: ${today()}  |  Items: ${items.length}`, 14, 28)
+  const PAGE_W  = 210
+  const PAGE_H  = 297
+  const MARGIN  = 14
+  const ROW_H   = 9    // mm — two-line rows (Style Number + SKU)
+  const HDR_ROW = 7    // mm — single-line column header row
 
-  let y = 40
-  doc.setFontSize(9)
-  doc.setFillColor(240, 240, 240)
-  doc.rect(14, y - 5, 182, 8, 'F')
-  doc.text('#', 16, y); doc.text('Style Number', 26, y)
-  doc.text('SKU', 90, y); doc.text('Status', 140, y); doc.text('Shot', 170, y)
-  y += 8
+  // Column x positions (all mm from left edge of page)
+  const xNum      = MARGIN       // row number
+  const xStyle    = 22           // Style Number (bold) / SKU (muted) stacked
+  const xDesc     = 54           // Description — widest column
+  const xLooks    = 130          // Look codes: L1, L2 …
+  const xCustody  = 148          // Custody status (colour-coded)
+  const xShot     = 174          // Shot status (colour-coded)
+  // right edge = MARGIN right = 196
+
+  // Description column width (leave 3mm before Looks column)
+  const descColW = xLooks - xDesc - 3   // 73mm
+
+  const CUSTODY_COLOR: Record<string, string> = {
+    at_studio:  PDF_COLORS.statusAtStudio,
+    in_transit: PDF_COLORS.statusInTransit,
+    at_client:  PDF_COLORS.statusAtClient,
+  }
+  const CUSTODY_LABEL: Record<string, string> = {
+    at_studio:  'At Studio',
+    in_transit: 'In Transit',
+    at_client:  'At Client',
+  }
+  const SHOT_COLOR: Record<string, string> = {
+    shot:        PDF_COLORS.statusAtStudio,
+    notShot:     PDF_COLORS.statusAtClient,
+    notRequired: PDF_COLORS.textMuted,
+  }
+  const SHOT_LABEL: Record<string, string> = {
+    shot:        '✓ Shot',
+    notShot:     'Not Shot',
+    notRequired: 'N/A',
+  }
+
+  function drawColHeaders(y: number) {
+    doc.setFillColor(PDF_COLORS.rowAltBg)
+    doc.rect(MARGIN, y, PAGE_W - MARGIN * 2, HDR_ROW, 'F')
+    doc.setDrawColor(PDF_COLORS.border)
+    doc.setLineWidth(0.3)
+    doc.line(MARGIN, y + HDR_ROW, PAGE_W - MARGIN, y + HDR_ROW)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(PDF_COLORS.textBody)
+    const hY = y + HDR_ROW * 0.68
+    doc.text('#',            xNum,     hY)
+    doc.text('Style / SKU',  xStyle,   hY)
+    doc.text('Description',  xDesc,    hY)
+    doc.text('Looks',        xLooks,   hY)
+    doc.text('Custody',      xCustody, hY)
+    doc.text('Shot',         xShot,    hY)
+  }
+
+  let y = CONTENT_TOP
+  drawColHeaders(y)
+  y += HDR_ROW
 
   items.forEach((item, i) => {
-    if (y > 270) { doc.addPage(); y = 20 }
-    if (i % 2 === 0) { doc.setFillColor(250, 250, 250); doc.rect(14, y - 5, 182, 8, 'F') }
-    doc.text(`${i + 1}`, 16, y)
-    doc.text(item.styleNumber.slice(0, 18), 26, y)
-    doc.text(item.sku.slice(0, 16), 90, y)
-    doc.text(item.custodyLocation, 140, y)
-    doc.text(item.shotStatus, 170, y)
-    y += 8
+    if (y + ROW_H > PAGE_H - MARGIN) {
+      doc.addPage()
+      y = CONTENT_TOP
+      drawColHeaders(y)
+      y += HDR_ROW
+    }
+
+    if (i % 2 === 0) {
+      doc.setFillColor(PDF_COLORS.rowAltBg)
+      doc.rect(MARGIN, y, PAGE_W - MARGIN * 2, ROW_H, 'F')
+    }
+
+    const line1Y = y + 3.2   // Style Number baseline (~top third of row)
+    const line2Y = y + 6.8   // SKU baseline (~bottom third of row)
+
+    // Row number
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(PDF_COLORS.textMuted)
+    doc.text(`${i + 1}`, xNum, line1Y)
+
+    // Style Number (bold)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(PDF_COLORS.textBody)
+    doc.text(item.styleNumber.slice(0, 18), xStyle, line1Y)
+
+    // SKU (smaller, muted)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(PDF_COLORS.textMuted)
+    doc.text(item.sku.slice(0, 20), xStyle, line2Y)
+
+    // Description (full column width, word-boundary first line)
+    doc.setFontSize(8)
+    doc.setTextColor(PDF_COLORS.textBody)
+    const descText = firstLineOf(doc, item.description || '', descColW)
+    if (!item.description) doc.setTextColor(PDF_COLORS.textMuted)
+    doc.text(descText, xDesc, line1Y)
+    doc.setTextColor(PDF_COLORS.textBody)
+
+    // Looks
+    doc.setFontSize(7)
+    doc.setTextColor(PDF_COLORS.accent)
+    const looksText = item.looks.length === 0
+      ? ''
+      : item.looks.slice(0, 4).map((l: number) => `L${l}`).join(' ') +
+        (item.looks.length > 4 ? '…' : '')
+    if (looksText) doc.text(looksText, xLooks, line1Y)
+    doc.setTextColor(PDF_COLORS.textBody)
+
+    // Custody (colour-coded)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(CUSTODY_COLOR[item.custodyLocation] ?? PDF_COLORS.textMuted)
+    doc.text(CUSTODY_LABEL[item.custodyLocation] ?? item.custodyLocation, xCustody, line1Y)
+
+    // Shot status (colour-coded)
+    doc.setTextColor(SHOT_COLOR[item.shotStatus] ?? PDF_COLORS.textMuted)
+    doc.text(SHOT_LABEL[item.shotStatus] ?? item.shotStatus, xShot, line1Y)
+
+    doc.setTextColor(PDF_COLORS.textBody)
+    doc.setFont('helvetica', 'normal')
+
+    y += ROW_H
   })
 
-  doc.save(`StockShot_StockList_${today()}.pdf`)
+  addPageHeaders(doc, shootName, PAGE_W, MARGIN)
+
+  const slug = shootName ? `_${slugify(shootName)}` : ''
+  doc.save(`StockShot_StockList${slug}_${today()}.pdf`)
 }
 
-// ── Shot list PDF (list format, grouped by look or product type) ──────────────
+// ── Shot list PDF (grouped by look or product type) ───────────────────────────
 
 const CUSTODY_LABEL: Record<string, string> = {
   at_client:  'At Client',
@@ -83,30 +290,44 @@ const CUSTODY_LABEL: Record<string, string> = {
   at_studio:  'At Studio',
 }
 
+const CUSTODY_COLOR: Record<string, string> = {
+  at_studio:  PDF_COLORS.statusAtStudio,
+  in_transit: PDF_COLORS.statusInTransit,
+  at_client:  PDF_COLORS.statusAtClient,
+}
+
 export async function exportShotListPDF(
   items: StockItem[],
   groupBy: 'look' | 'productType' = 'look',
   includeLocation = false,
+  shootName = '',
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
 
-  doc.setFontSize(16)
-  doc.text('StockShot — Shot List', 14, 20)
-  doc.setFontSize(10)
-  doc.text(`Generated: ${today()}  |  Items: ${items.length}  |  Grouped by: ${groupBy === 'look' ? 'Look' : 'Product Type'}`, 14, 28)
+  const PAGE_W      = 210
+  const PAGE_H      = 297
+  const MARGIN      = 14
+  const GROUP_HDR_H = 7
+  const COL_HDR_H   = 7
+  const ROW_H       = 7
+  const GROUP_GAP   = 3
 
-  let y = 40
+  // Column layout — Location is optional; Description takes the freed space when off
+  const xStyle   = MARGIN
+  const xDesc    = 56
+  const xLoc     = includeLocation ? 128 : null   // 72mm description when on
+  const xShot    = includeLocation ? 157 : 155    // 95mm description when off
+  const xAng     = includeLocation ? 177 : 178
+  const descColW = (xLoc ?? xShot) - xDesc - 4   // 70mm (with loc) / 91mm (without)
 
-  // Column x positions — shift if location column included
-  const xStyle = 16
-  const xDesc  = 65
-  const xLoc   = includeLocation ? 120 : null
-  const xShot  = includeLocation ? 152 : 135
-  const xAng   = includeLocation ? 172 : 158
-  const descMax = includeLocation ? 20 : 28
+  const SHOT_COLOR: Record<string, string> = {
+    shot:        PDF_COLORS.statusAtStudio,
+    notShot:     PDF_COLORS.statusAtClient,
+    notRequired: PDF_COLORS.textMuted,
+  }
 
-  // Group items
+  // Build groups
   const groups: Record<string, StockItem[]> = {}
   if (groupBy === 'look') {
     const looks = [...new Set(items.flatMap(i => i.looks))].sort((a, b) => a - b)
@@ -121,50 +342,111 @@ export async function exportShotListPDF(
     })
   }
 
+  let y = CONTENT_TOP
+
   for (const [groupName, groupItems] of Object.entries(groups)) {
-    if (y > 260) { doc.addPage(); y = 20 }
+    if (y + GROUP_HDR_H + COL_HDR_H + ROW_H > PAGE_H - MARGIN) {
+      doc.addPage()
+      y = CONTENT_TOP
+    }
 
-    // Group header
-    doc.setFillColor(237, 233, 254)
-    doc.rect(14, y - 5, 182, 9, 'F')
-    doc.setFontSize(10)
-    doc.setTextColor(123, 31, 162)
-    doc.text(`${groupName}  (${groupItems.length} items)`, 16, y)
-    doc.setTextColor(0, 0, 0)
-    y += 10
+    // ── Group header band ──────────────────────────────────────────────────
+    doc.setFillColor(PDF_COLORS.accentBg)
+    doc.rect(MARGIN, y, PAGE_W - MARGIN * 2, GROUP_HDR_H, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(PDF_COLORS.accent)
+    doc.text(
+      `${groupName}  (${groupItems.length} item${groupItems.length !== 1 ? 's' : ''})`,
+      MARGIN + 3,
+      y + GROUP_HDR_H * 0.70,
+    )
+    y += GROUP_HDR_H
 
-    // Column headers
+    // ── Column headers ─────────────────────────────────────────────────────
+    doc.setFillColor(PDF_COLORS.rowAltBg)
+    doc.rect(MARGIN, y, PAGE_W - MARGIN * 2, COL_HDR_H, 'F')
+    doc.setDrawColor(PDF_COLORS.border)
+    doc.setLineWidth(0.3)
+    doc.line(MARGIN, y + COL_HDR_H, PAGE_W - MARGIN, y + COL_HDR_H)
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
-    doc.setFillColor(245, 245, 245)
-    doc.rect(14, y - 4, 182, 7, 'F')
-    doc.text('Style Number', xStyle, y)
-    doc.text('Description', xDesc, y)
-    if (xLoc != null) doc.text('Location', xLoc, y)
-    doc.text('Shot', xShot, y)
-    doc.text('Angles', xAng, y)
-    y += 8
+    doc.setTextColor(PDF_COLORS.textBody)
+    const hY = y + COL_HDR_H * 0.70
+    doc.text('Style Number', xStyle + 2, hY)
+    doc.text('Description',  xDesc,      hY)
+    if (xLoc != null) doc.text('Location', xLoc, hY)
+    doc.text('Shot',         xShot,      hY)
+    doc.text('Angles',       xAng,       hY)
+    y += COL_HDR_H
 
+    // ── Data rows ──────────────────────────────────────────────────────────
     groupItems.forEach((item, i) => {
-      if (y > 270) { doc.addPage(); y = 20 }
-      if (i % 2 === 0) { doc.setFillColor(252, 252, 252); doc.rect(14, y - 4, 182, 7, 'F') }
+      if (y + ROW_H > PAGE_H - MARGIN) { doc.addPage(); y = CONTENT_TOP }
+
+      if (i % 2 === 0) {
+        doc.setFillColor(PDF_COLORS.rowAltBg)
+        doc.rect(MARGIN, y, PAGE_W - MARGIN * 2, ROW_H, 'F')
+      }
+
+      const rowY = y + ROW_H * 0.70
+
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
-      doc.text(item.styleNumber.slice(0, 18), xStyle, y)
-      doc.text((item.description || '—').slice(0, descMax), xDesc, y)
-      if (xLoc != null) doc.text((CUSTODY_LABEL[item.custodyLocation] ?? item.custodyLocation).slice(0, 12), xLoc, y)
-      doc.text(item.shotStatus === 'shot' ? '✓ Shot' : item.shotStatus === 'notRequired' ? 'N/A' : 'Not Shot', xShot, y)
+      doc.setTextColor(PDF_COLORS.textBody)
+      doc.text(item.styleNumber.slice(0, 18), xStyle + 2, rowY)
+
+      // Description — word-boundary first line using rendered column width
+      const descText = firstLineOf(doc, item.description || '', descColW)
+      if (!item.description) doc.setTextColor(PDF_COLORS.textMuted)
+      doc.text(descText, xDesc, rowY)
+      doc.setTextColor(PDF_COLORS.textBody)
+
+      // Location (optional, colour-coded)
+      if (xLoc != null) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7.5)
+        doc.setTextColor(CUSTODY_COLOR[item.custodyLocation] ?? PDF_COLORS.textMuted)
+        doc.text(CUSTODY_LABEL[item.custodyLocation] ?? item.custodyLocation, xLoc, rowY)
+        doc.setTextColor(PDF_COLORS.textBody)
+      }
+
+      // Shot status (colour-coded)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(SHOT_COLOR[item.shotStatus] ?? PDF_COLORS.textMuted)
+      doc.text(
+        item.shotStatus === 'shot' ? '✓ Shot'
+          : item.shotStatus === 'notRequired' ? 'N/A'
+          : 'Not Shot',
+        xShot, rowY,
+      )
+
+      // Angles
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(PDF_COLORS.textBody)
       const angleStr = item.requiredAngles.length > 0
         ? `${item.completedAngles.length}/${item.requiredAngles.length}`
         : '—'
-      doc.text(angleStr, xAng, y)
-      y += 7
+      if (angleStr === '—') doc.setTextColor(PDF_COLORS.textMuted)
+      doc.text(angleStr, xAng, rowY)
+      doc.setTextColor(PDF_COLORS.textBody)
+
+      y += ROW_H
     })
-    y += 6
+
+    y += GROUP_GAP
   }
 
-  doc.save(`StockShot_ShotList_${today()}.pdf`)
+  addPageHeaders(doc, shootName, PAGE_W, MARGIN)
+
+  const slug = shootName ? `_${slugify(shootName)}` : ''
+  doc.save(`StockShot_ShotList${slug}_${today()}.pdf`)
 }
 
 // ── Label grid PDF ────────────────────────────────────────────────────────────
+// Cell layout (new): QR top-left, Style+Look top-right, Description full-width
+// below QR, barcode value full-width at bottom.
 
 export interface LabelOptions {
   perRow: 4 | 8
@@ -177,24 +459,44 @@ export interface LabelOptions {
 
 export async function exportLabelGridPDF(
   items: StockItem[],
-  options: LabelOptions
+  options: LabelOptions,
+  shootName = '',
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
 
-  const isNarrow = options.perRow === 8
-  const doc = new jsPDF({ orientation: isNarrow ? 'landscape' : 'portrait' })
+  const isNarrow   = options.perRow === 8
+  const doc        = new jsPDF({ orientation: isNarrow ? 'landscape' : 'portrait' })
+  const pageW      = isNarrow ? 297 : 210
+  const pageH      = isNarrow ? 210 : 297
+  const margin     = 8
+  const cols       = isNarrow ? 8 : 4
+  const labelW     = (pageW - margin * 2) / cols
+  const labelH     = isNarrow ? 38 : 52    // slightly taller to fit description row
+  const qrSize     = isNarrow ? 22 : 28
+  const LOOK_HDR_H = 7
+  const PAGE_BOTTOM = pageH - margin
+  const cellPad    = 2       // mm — internal label padding
 
-  const pageW = isNarrow ? 297 : 210
-  const pageH = isNarrow ? 210 : 297
-  const margin = 8
-  const cols = options.perRow === 4 ? 4 : 8
-  const labelW = (pageW - margin * 2) / cols
-  const labelH = isNarrow ? 36 : 50
-  const qrSize = isNarrow ? 22 : 28
-  const maxTextW = labelW - qrSize - 6
-  const fontSize = isNarrow ? 5.5 : 6.5
+  // Right-of-QR text region dimensions
+  const txLeft  = margin + cellPad + qrSize + 1.5  // offset per-column computed below
+  const textRegionW = labelW - qrSize - cellPad * 2 - 2.5  // available mm for style/look
+  const fsStyle = isNarrow ? 5   : 8     // pt — style number font size
+  const fsLook  = isNarrow ? 6   : 9     // pt — look code font size (larger/accent)
+  const fsDesc  = isNarrow ? 5   : 7     // pt — description font size
+  const fsQrVal = isNarrow ? 4   : 5     // pt — QR value font size
 
-  // Group items
+  // Vertical positions within cell (all relative to cell top-left ly)
+  const qrTop       = cellPad                            // QR top
+  const qrBot       = cellPad + qrSize                   // QR bottom
+  const styleBase   = qrTop + (isNarrow ? 2.5 : 3.5)    // Style Number baseline
+  const lookBase    = styleBase + (isNarrow ? 3.5 : 5.0) // Look code baseline
+  const descTop     = qrBot + 2                          // Description zone start
+  const qrValTop    = labelH - cellPad - (isNarrow ? 2 : 2.5) // QR value baseline
+
+  // Description width uses full cell interior
+  const descW = labelW - cellPad * 2
+
+  // Build groups
   const groups: Array<{ name: string; items: StockItem[] }> = []
   if (options.groupBy === 'look') {
     const looks = [...new Set(items.flatMap(i => i.looks))].sort((a, b) => a - b)
@@ -210,13 +512,7 @@ export async function exportLabelGridPDF(
     })
   }
 
-  let currentCol = 0
-  let currentRow = 0
-  let pageItemCount = 0
-  const rowsPerPage = Math.floor((pageH - margin * 2) / labelH)
-  const labelsPerPage = cols * rowsPerPage
-
-  // Generate QR codes for all items first
+  // Pre-generate all QR codes
   const qrCache: Record<string, string> = {}
   for (const item of items) {
     if (!qrCache[item.qrCodeValue]) {
@@ -224,114 +520,127 @@ export async function exportLabelGridPDF(
     }
   }
 
+  let y          = CONTENT_TOP
+  let currentCol = 0
+
   for (const group of groups) {
-    // Group header — takes full row
+    // Flush partial row before the group header
     if (currentCol > 0) {
-      currentRow++
       currentCol = 0
+      y += labelH
     }
-
-    // New page if needed
-    if (pageItemCount > 0 && currentRow >= rowsPerPage) {
+    // Push to next page if header + one label row won't fit
+    if (y + LOOK_HDR_H + labelH > PAGE_BOTTOM) {
       doc.addPage()
-      currentRow = 0
-      currentCol = 0
-      pageItemCount = 0
+      y = CONTENT_TOP
     }
 
-    // Draw group header
-    const hx = margin
-    const hy = margin + currentRow * labelH
-    doc.setFillColor(237, 233, 254)
-    doc.rect(hx, hy, pageW - margin * 2, 8, 'F')
+    // ── Group header band ──────────────────────────────────────────────────
+    doc.setFillColor(PDF_COLORS.accentBg)
+    doc.rect(margin, y, pageW - margin * 2, LOOK_HDR_H, 'F')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(123, 31, 162)
-    doc.text(`${group.name}  (${group.items.length} items)`, hx + 2, hy + 5.5)
-    doc.setTextColor(0, 0, 0)
-    currentRow++
-    pageItemCount++
+    doc.setTextColor(PDF_COLORS.accent)
+    doc.text(
+      `${group.name}  (${group.items.length} item${group.items.length !== 1 ? 's' : ''})`,
+      margin + 3,
+      y + LOOK_HDR_H * 0.70,
+    )
+    doc.setTextColor(PDF_COLORS.textBody)
+    y += LOOK_HDR_H
 
+    // ── Label cells ────────────────────────────────────────────────────────
     for (const item of group.items) {
-      // New page if needed
-      if (currentRow >= rowsPerPage) {
+      if (currentCol === 0 && y + labelH > PAGE_BOTTOM) {
         doc.addPage()
-        currentRow = 0
-        currentCol = 0
-        pageItemCount = 0
+        y = CONTENT_TOP
       }
 
-      const x = margin + currentCol * labelW
-      const y = margin + currentRow * labelH
+      const lx = margin + currentCol * labelW
+      const ly = y
 
-      // Label border
-      doc.setDrawColor(220, 220, 220)
-      doc.rect(x + 1, y + 1, labelW - 2, labelH - 2)
+      // Cell border
+      doc.setDrawColor(PDF_COLORS.border)
+      doc.setLineWidth(0.5)
+      doc.rect(lx + 0.5, ly + 0.5, labelW - 1, labelH - 1)
 
-      // QR code
+      // ── QR code (top-left) ───────────────────────────────────────────────
       const qrData = qrCache[item.qrCodeValue]
       if (qrData) {
-        doc.addImage(qrData, 'PNG', x + 2, y + 2, qrSize, qrSize)
+        doc.addImage(qrData, 'PNG', lx + cellPad, ly + qrTop, qrSize, qrSize)
       }
 
-      // Text fields — truncated to single lines, no wrapping
-      const tx = x + qrSize + 3
-      let ty = y + 6
-      const maxChars = isNarrow ? 10 : 14
-
-      doc.setFontSize(fontSize)
-
+      // ── Style Number (top-right, beside QR) ─────────────────────────────
+      const colTxLeft = lx + cellPad + qrSize + 1.5
       if (options.showStyleNumber) {
         doc.setFont('helvetica', 'bold')
-        const sn = item.styleNumber.length > maxChars + 2
-          ? item.styleNumber.slice(0, maxChars + 2)
-          : item.styleNumber
-        doc.text(sn, tx, ty)
-        ty += isNarrow ? 4.5 : 5.5
+        doc.setFontSize(fsStyle)
+        doc.setTextColor(PDF_COLORS.textBody)
+        const sn = firstLineOf(doc, item.styleNumber, textRegionW)
+        doc.text(sn, colTxLeft, ly + styleBase)
+      }
+
+      // ── Look code (below Style Number, right-of-QR, accent colour) ──────
+      if (options.showLookNumber && item.looks.length > 0) {
+        const lookStr = item.looks.slice(0, 3).map((l: number) => `L${l}`).join(' ') +
+          (item.looks.length > 3 ? '…' : '')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(fsLook)
+        doc.setTextColor(PDF_COLORS.accent)
+        doc.text(lookStr, colTxLeft, ly + lookBase)
+        doc.setTextColor(PDF_COLORS.textBody)
+      }
+
+      // ── Description (full cell width, below QR zone) ─────────────────────
+      if (options.showDescription) {
         doc.setFont('helvetica', 'normal')
+        doc.setFontSize(fsDesc)
+        doc.setTextColor(PDF_COLORS.textMuted)
+
+        if (item.description) {
+          // Allow up to 2 lines; ellipsis only if a single word overflows
+          const lines: string[] = doc.splitTextToSize(item.description, descW - 1)
+          const maxLines = 2
+          const display = lines.slice(0, maxLines)
+          if (lines.length > maxLines) {
+            display[maxLines - 1] = display[maxLines - 1].replace(/\s+$/, '') + '…'
+          }
+          const lineH = fsDesc * 0.42    // mm — line height for this font size
+          display.forEach((line: string, li: number) => {
+            doc.text(line, lx + cellPad, ly + descTop + lineH + li * (lineH + 0.5))
+          })
+        }
+        doc.setTextColor(PDF_COLORS.textBody)
       }
 
-      if (options.showDescription && item.description) {
-        const desc = item.description.length > maxChars
-          ? item.description.slice(0, maxChars) + '…'
-          : item.description
-        doc.text(desc, tx, ty)
-        ty += isNarrow ? 4 : 5
-      }
-
-      if (options.showLookNumber) {
-        doc.setTextColor(123, 31, 162)
-        const lookStr = `L${item.looks.join(',')}`
-        doc.text(lookStr, tx, ty)
-        doc.setTextColor(0, 0, 0)
-        ty += isNarrow ? 4 : 5
-      }
-
+      // ── QR value (full cell width, bottom of cell) ───────────────────────
       if (options.showQRValue) {
-        doc.setFontSize(isNarrow ? 4.5 : 5.5)
-        doc.setTextColor(150, 150, 150)
-        const qrVal = item.qrCodeValue.length > maxChars + 2
-          ? item.qrCodeValue.slice(0, maxChars + 2)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(fsQrVal)
+        doc.setTextColor(PDF_COLORS.textMuted)
+        const qrVal = item.qrCodeValue.length > 22
+          ? item.qrCodeValue.slice(0, 22) + '…'
           : item.qrCodeValue
-        doc.text(qrVal, tx, ty)
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(fontSize)
+        doc.text(qrVal, lx + cellPad, ly + qrValTop)
+        doc.setTextColor(PDF_COLORS.textBody)
       }
 
       currentCol++
       if (currentCol >= cols) {
         currentCol = 0
-        currentRow++
-        pageItemCount++
+        y += labelH
       }
     }
 
-    // End of group — move to next row
+    // Flush partial row at end of group
     if (currentCol > 0) {
-      currentRow++
       currentCol = 0
-      pageItemCount++
+      y += labelH
     }
   }
 
-  doc.save(`StockShot_Labels_${options.perRow}up_${today()}.pdf`)
+  addPageHeaders(doc, shootName, pageW, margin)
+
+  const slug = shootName ? `_${slugify(shootName)}` : ''
+  doc.save(`StockShot_Labels${slug}_${today()}.pdf`)
 }

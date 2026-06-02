@@ -120,7 +120,7 @@ export default function ShotListView() {
   async function handleLabelExport() {
     setExporting(true)
     try {
-      await exportLabelGridPDF(filtered, labelOptions)
+      await exportLabelGridPDF(filtered, labelOptions, shoot?.name)
     } finally {
       setExporting(false)
       setShowLabelModal(false)
@@ -358,7 +358,7 @@ export default function ShotListView() {
                 disabled={exporting}
                 onClick={async () => {
                   setExporting(true)
-                  try { await exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy, listPdfIncludeLocation) }
+                  try { await exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy, listPdfIncludeLocation, shoot?.name) }
                   finally { setExporting(false); setShowListPdfModal(false) }
                 }}
               >

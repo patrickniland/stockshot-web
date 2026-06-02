@@ -193,7 +193,7 @@ export default function StockListView() {
         </Button>
         <Button variant="secondary" size="sm" Icon={DownloadSimple} onClick={() => exportStockListCSV(filtered)}>XLS</Button>
         <Button variant="secondary" size="sm" Icon={DownloadSimple} onClick={() => exportDetailedStockListCSV(filtered)} title="XLS with full custody history">XLS+</Button>
-        <Button variant="secondary" size="sm" Icon={FilePdf} onClick={() => exportStockListPDF(filtered)}>PDF</Button>
+        <Button variant="secondary" size="sm" Icon={FilePdf} onClick={() => exportStockListPDF(filtered, activeShoot?.name)}>PDF</Button>
       </div>
 
       {/* Bulk action bar */}
