@@ -402,30 +402,32 @@ export default function StockListView() {
                   </div>
                 </div>
 
-                {/* Row 2: Release actions — only when item is at client */}
-                {item.custodyLocation === 'at_client' && activeShootId && (
+                {/* Row 2: Release actions */}
+                {activeShootId && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px', borderTop: '1px solid #E8E8E8', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '10px', fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', flexShrink: 0 }}>
                       Release:
                     </span>
-                    <button
-                      onClick={() => {
-                        restoreItemState(item.id, {
-                          custodyLocation: 'at_client',
-                          custodyHistory: [],
-                          lastScannedAt: null,
-                          lastScannedBy: null,
-                        })
-                        setExpandedId(null)
-                      }}
-                      style={{
-                        padding: '5px 12px', background: '#FFF8E1', border: '1px solid #FFE082',
-                        borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#F57F17',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ↩ Reset to pending
-                    </button>
+                    {item.custodyLocation === 'at_client' && (
+                      <button
+                        onClick={() => {
+                          restoreItemState(item.id, {
+                            custodyLocation: 'at_client',
+                            custodyHistory: [],
+                            lastScannedAt: null,
+                            lastScannedBy: null,
+                          })
+                          setExpandedId(null)
+                        }}
+                        style={{
+                          padding: '5px 12px', background: '#FFF8E1', border: '1px solid #FFE082',
+                          borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#F57F17',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ↩ Reset to pending
+                      </button>
+                    )}
                     {confirmRemoveId === item.id ? (
                       <>
                         <span style={{ fontSize: '11px', color: '#666' }}>Sure?</span>
@@ -451,7 +453,7 @@ export default function StockListView() {
                           cursor: 'pointer',
                         }}
                       >
-                        🗑 Remove from shoot
+                        Remove from shoot
                       </button>
                     )}
                   </div>

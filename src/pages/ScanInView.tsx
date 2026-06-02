@@ -92,6 +92,7 @@ export default function ScanInView() {
   const { addToast } = useToast()
 
   const scanInputRef = useRef<HTMLInputElement>(null)
+  const lastScannedRef = useRef<{ barcode: string; at: number } | null>(null)
   const [scanInput, setScanInput] = useState('')
   const [showCamera, setShowCamera] = useState(false)
   const [recentScans, setRecentScans] = useState<RecentScan[]>([])
@@ -203,6 +204,11 @@ export default function ScanInView() {
   function handleScan(barcode: string) {
     const raw = barcode.trim()
     if (!raw || !canScan || pendingAction) return
+
+    // Debounce: drop duplicate barcode fired within 600ms (mode-toggle double-fire)
+    const now = Date.now()
+    if (lastScannedRef.current?.barcode === raw && now - lastScannedRef.current.at < 600) return
+    lastScannedRef.current = { barcode: raw, at: now }
 
     // Only search the current shoot — items in other shoots are independent
     const currentShoot = useAppStore.getState().savedShoots.find(s => s.id === selectedShootId)
@@ -638,8 +644,8 @@ export default function ScanInView() {
               <span className="w-14 text-right text-[var(--text-xs)] text-slate-400">
                 {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
               </span>
-              {item.custodyLocation === 'at_client' && (
-                <div className="flex gap-1 ml-2 flex-shrink-0">
+              <div className="flex gap-1 ml-2 flex-shrink-0">
+                {item.custodyLocation === 'at_client' && (
                   <button
                     onClick={() => resetToPending(item)}
                     title="Reset to pending (undo scan, keep in shoot)"
@@ -647,32 +653,32 @@ export default function ScanInView() {
                   >
                     ↩
                   </button>
-                  {confirmRemoveId === item.id ? (
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => { removeItemFromShoot(item.id, selectedShootId); setConfirmRemoveId(null) }}
-                        className="px-1.5 py-0.5 rounded text-[var(--text-xs)] bg-[var(--color-danger)] text-white"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        onClick={() => setConfirmRemoveId(null)}
-                        className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:bg-slate-100"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
+                )}
+                {confirmRemoveId === item.id ? (
+                  <div className="flex gap-1">
                     <button
-                      onClick={() => setConfirmRemoveId(item.id)}
-                      title="Remove from shoot entirely"
-                      className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-danger)] hover:bg-red-50 transition-colors"
+                      onClick={() => { removeItemFromShoot(item.id, selectedShootId); setConfirmRemoveId(null) }}
+                      className="px-1.5 py-0.5 rounded text-[var(--text-xs)] bg-[var(--color-danger)] text-white"
                     >
-                      🗑
+                      Confirm
                     </button>
-                  )}
-                </div>
-              )}
+                    <button
+                      onClick={() => setConfirmRemoveId(null)}
+                      className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:bg-slate-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmRemoveId(item.id)}
+                    title="Remove from shoot"
+                    className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-danger)] hover:bg-red-50 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
