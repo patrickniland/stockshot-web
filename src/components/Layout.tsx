@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { version } from '../../package.json'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   DownloadSimple,
@@ -147,8 +148,9 @@ export default function Layout({ children, session, onSignOut }: {
             </div>
             <span className="hidden lg:block text-white text-[17px] font-bold">StockShot</span>
           </div>
-          <div className="hidden lg:block text-slate-500 text-[9px] tracking-[1.2px] font-medium">
-            BY ENHANCE RETAIL
+          <div className="hidden lg:flex items-center justify-between text-[9px] tracking-[1.2px] font-medium">
+            <span className="text-slate-500">BY ENHANCE RETAIL</span>
+            <span className="text-slate-600 font-mono">v{version}</span>
           </div>
         </div>
 
