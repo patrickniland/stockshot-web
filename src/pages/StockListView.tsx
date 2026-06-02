@@ -292,7 +292,7 @@ export default function StockListView() {
           const isActive = (item.custodyHistory ?? []).length > 0
           return (
             <div key={item.id}>
-              <div className={`flex items-center px-4 py-2 gap-2 cursor-pointer border-b ${
+              <div className={`flex items-center px-4 py-2.5 gap-2 cursor-pointer border-b ${
                 expandedId === item.id ? 'border-transparent' : 'border-[var(--color-border)]'
               } ${
                 selectedIds.has(item.id) ? 'bg-[var(--color-info)]/5' : i % 2 === 0 ? 'bg-white' : 'bg-[var(--color-surface-muted)]'

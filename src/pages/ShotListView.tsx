@@ -206,7 +206,7 @@ export default function ShotListView() {
           <button
             key={opt.value}
             onClick={() => setShotListLocationFilter(opt.value)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+            className={`px-3 py-2 rounded-full text-xs font-semibold border transition-colors cursor-pointer min-h-[36px] ${
               shotListLocationFilter === opt.value
                 ? 'bg-[var(--color-info)]/10 border-[var(--color-info)] text-[var(--color-info)]'
                 : 'bg-[var(--color-surface-muted)] border-[var(--color-border)] text-slate-500 hover:border-slate-300'
@@ -499,7 +499,7 @@ function SortableLookGroup({
           <button
             disabled={gi === 0 || isDraggingAny}
             onClick={onMoveUp}
-            className="px-1.5 py-0.5 text-xs border border-[var(--color-accent)]/30 rounded text-[var(--color-accent)] bg-white disabled:opacity-30 disabled:cursor-default cursor-pointer leading-tight hover:bg-[var(--color-accent)]/10 disabled:hover:bg-white"
+            className="px-2 py-2 text-xs border border-[var(--color-accent)]/30 rounded text-[var(--color-accent)] bg-white disabled:opacity-30 disabled:cursor-default cursor-pointer leading-tight hover:bg-[var(--color-accent)]/10 disabled:hover:bg-white min-w-[32px] min-h-[32px] flex items-center justify-center"
             title="Move up in shooting schedule"
           >
             <CaretUp size={10} />
@@ -507,7 +507,7 @@ function SortableLookGroup({
           <button
             disabled={gi === totalLookGroups - 1 || isDraggingAny}
             onClick={onMoveDown}
-            className="px-1.5 py-0.5 text-xs border border-[var(--color-accent)]/30 rounded text-[var(--color-accent)] bg-white disabled:opacity-30 disabled:cursor-default cursor-pointer leading-tight hover:bg-[var(--color-accent)]/10 disabled:hover:bg-white"
+            className="px-2 py-2 text-xs border border-[var(--color-accent)]/30 rounded text-[var(--color-accent)] bg-white disabled:opacity-30 disabled:cursor-default cursor-pointer leading-tight hover:bg-[var(--color-accent)]/10 disabled:hover:bg-white min-w-[32px] min-h-[32px] flex items-center justify-center"
             title="Move down in shooting schedule"
           >
             <CaretDown size={10} />
@@ -633,7 +633,7 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
                         <button
                           key={angle}
                           onClick={e => { e.stopPropagation(); onAngleToggle(angle) }}
-                          className={`px-3 py-1 rounded-full text-sm font-semibold cursor-pointer border-none transition-colors ${
+                          className={`px-3 py-2 rounded-full text-sm font-semibold cursor-pointer border-none transition-colors min-h-[40px] ${
                             done
                               ? 'bg-[var(--color-accent)] text-white'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -658,7 +658,7 @@ function ShotRow({ item, index, expanded, productTypes, locationFilter, onToggle
                   <button
                     key={s}
                     onClick={e => { e.stopPropagation(); onShotStatusChange(s) }}
-                    className={`px-2.5 py-1 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-colors ${
+                    className={`px-2.5 py-2 rounded-[var(--radius-md)] text-xs font-medium cursor-pointer transition-colors min-h-[40px] ${
                       item.shotStatus === s
                         ? 'bg-[var(--color-brand)] text-white border-none'
                         : 'border border-[var(--color-border)] bg-white text-slate-600 hover:bg-slate-50'
