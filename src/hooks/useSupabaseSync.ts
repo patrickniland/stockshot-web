@@ -194,6 +194,31 @@ export async function pullAll(): Promise<void> {
   }
 }
 
+// ── syncNow ───────────────────────────────────────────────────────────────────
+// Single entry point for all manual sync triggers (indicator click, nav re-click).
+// Push-before-pull, guards against overlapping syncs via syncStatus.
+export async function syncNow(): Promise<void> {
+  const store = useAppStore.getState()
+  if (store.syncStatus === 'syncing') return
+
+  store.setSyncStatus('syncing')
+
+  try {
+    const { dirtyItemIds, deletedShootIds, deletedClientIds } = useAppStore.getState()
+    if (dirtyItemIds.length > 0 || deletedShootIds.length > 0 || deletedClientIds.length > 0) {
+      const { failed } = await pushDirty()
+      if (failed.length > 0) {
+        useAppStore.getState().setSyncStatus('error')
+        return
+      }
+    }
+    await pullSince(useAppStore.getState().lastPulledAt)
+  } catch (e) {
+    console.error('[Sync] syncNow failed:', e)
+    useAppStore.getState().setSyncStatus('error')
+  }
+}
+
 // ── Hook (startup only) ───────────────────────────────────────────────────────
 export function useSupabaseSync(orgId: string | null) {
   const [loaded, setLoaded] = useState(false)

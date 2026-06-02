@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { version } from '../../package.json'
-import { pushDirty, pullSince } from '../hooks/useSupabaseSync'
+import { syncNow } from '../hooks/useSupabaseSync'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   DownloadSimple,
@@ -45,7 +45,7 @@ function formatAgo(ts: string | null): string {
   return `${Math.round(secs / 3600)}h ago`
 }
 
-function SyncIndicator({ onSync }: { onSync: () => void }) {
+function SyncIndicator() {
   const syncStatus = useAppStore(s => s.syncStatus)
   const lastSyncedAt = useAppStore(s => s.lastSyncedAt)
   const [, tick] = useState(0)
@@ -60,15 +60,18 @@ function SyncIndicator({ onSync }: { onSync: () => void }) {
   let text = ''
   let dotClass = 'bg-slate-500'
   let textClass = 'text-slate-500'
+  let tooltip = 'Sync now'
 
   if (isSyncing) {
     text = 'Syncing…'
     dotClass = 'bg-blue-400'
     textClass = 'text-blue-400'
+    tooltip = 'Syncing…'
   } else if (syncStatus === 'error') {
-    text = 'Sync failed — tap to retry'
+    text = 'Sync failed — retry'
     dotClass = 'bg-[var(--color-danger)]'
     textClass = 'text-[var(--color-danger)]'
+    tooltip = 'Retry sync'
   } else if (lastSyncedAt) {
     text = `Synced ${formatAgo(lastSyncedAt)}`
   }
@@ -77,13 +80,13 @@ function SyncIndicator({ onSync }: { onSync: () => void }) {
 
   return (
     <button
-      onClick={isSyncing ? undefined : onSync}
+      onClick={() => syncNow()}
       disabled={isSyncing}
-      title="Sync now"
-      className="w-full bg-transparent border-none cursor-pointer disabled:cursor-default group"
+      title={tooltip}
+      className="w-full bg-transparent border-none cursor-pointer disabled:cursor-default group px-2 py-1.5 min-h-[32px]"
     >
-      <div className={`block lg:hidden w-2 h-2 rounded-full mx-auto mb-2 ${dotClass} group-hover:opacity-70 transition-opacity`} />
-      <div className={`hidden lg:block px-3 pb-2 text-[10px] text-center ${textClass} group-hover:underline transition-opacity`}>
+      <div className={`block lg:hidden w-2 h-2 rounded-full mx-auto ${dotClass} group-hover:opacity-70 transition-opacity`} />
+      <div className={`hidden lg:block text-[10px] text-center ${textClass} group-hover:underline`}>
         {text}
       </div>
     </button>
@@ -126,12 +129,6 @@ export default function Layout({ children, session, onSignOut }: {
   const studioQueueCount = getStudioQueue().length
   const pendingCount = getPending().length
   const meaningful = pendingIsMeaningful()
-
-  const lastPulledAt = useAppStore(s => s.lastPulledAt)
-
-  const handleSync = () => {
-    pushDirty().then(() => pullSince(lastPulledAt))
-  }
 
   const isPhone = useMediaQuery('(max-width: 767px)')
   const location = useLocation()
@@ -183,6 +180,12 @@ export default function Layout({ children, session, onSignOut }: {
                 to={to}
                 end={to !== '/admin'}
                 title={label}
+                onClick={(e) => {
+                  if (location.pathname === to || (to === '/admin' && location.pathname.startsWith('/admin'))) {
+                    e.preventDefault()
+                    syncNow()
+                  }
+                }}
                 className={({ isActive }) =>
                   [
                     'flex items-center justify-center lg:justify-start gap-[10px]',
@@ -215,7 +218,7 @@ export default function Layout({ children, session, onSignOut }: {
         </nav>
 
         {/* Sync indicator */}
-        <SyncIndicator onSync={handleSync} />
+        <SyncIndicator />
 
         {/* Active shoot strip */}
         {activeShoot && (
