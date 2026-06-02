@@ -671,6 +671,10 @@ const useAppStore = create<AppStore>()(
             lastScannedBy: updates.lastScannedBy,
           }).catch(e => console.error('[Sync] restoreItemState error:', e))
         }
+        if (updates.looks !== undefined) {
+          updateItemStatus(itemId, { looks: updates.looks })
+            .catch(e => console.error('[Sync] restoreItemState looks error:', e))
+        }
       },
 
       // ── Legacy scan actions ───────────────────────────────
