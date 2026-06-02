@@ -1,12 +1,15 @@
-// StockShot — Import View (fixed)
+// StockShot — Import View
 
 import { useState, useRef } from 'react'
+import { FolderOpen, FileText, CheckCircle, XCircle, Warning } from '@phosphor-icons/react'
 import { useNavSync } from '../hooks/useNavSync'
 import { v4 as uuidv4 } from 'uuid'
 import { parseFileToRows, previewHeaders, importFromRows } from '../lib/importCoordinator'
 import { ColumnMapping, defaultColumnMapping } from '../types'
 import useAppStore from '../store/useAppStore'
 import { upsertItems, upsertShootMeta } from '../lib/db'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
 
 export default function ImportView() {
   useNavSync({ onEnter: 'pull' })
@@ -76,7 +79,6 @@ export default function ImportView() {
       const activeShoot = getActiveShoot()
       if (activeShoot) {
         addDropToActiveShoot(drop, result.items)
-        // Save items to Supabase
         if (orgId) {
           upsertItems(result.items, activeShoot.id, orgId)
             .catch(e => console.error('[Import] items save error:', e))
@@ -117,35 +119,23 @@ export default function ImportView() {
   const dataRowCount = rows.length - (mapping.hasHeaderRow ? 1 : 0)
   const activeShoot = getActiveShoot()
 
-  const card: React.CSSProperties = {
-    background: '#fff', border: '1px solid #E0E0E0',
-    borderRadius: '10px', padding: '1.25rem', marginBottom: '1rem',
-  }
-  const label11: React.CSSProperties = { fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }
-  const input: React.CSSProperties = {
-    width: '100%', padding: '8px', border: '1px solid #E0E0E0',
-    borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box',
-  }
-  const select: React.CSSProperties = {
-    padding: '6px 8px', border: '1px solid #E0E0E0',
-    borderRadius: '6px', fontSize: '12px', flex: 1,
-  }
-
   return (
-    <div style={{ padding: '2rem', maxWidth: '820px' }}>
-      <h1 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '4px', color: '#111' }}>Import Stock</h1>
-      <p style={{ color: '#666', fontSize: '13px', marginBottom: '1.5rem' }}>
+    <div className="p-8 max-w-[820px]">
+      <h1 className="text-[22px] font-semibold text-neutral-900 mb-1">Import Stock</h1>
+      <p className="text-[13px] text-neutral-500 mb-6">
         Upload an XLSX or CSV file to create or add to a shoot.
       </p>
 
       {success && (
-        <div style={{ background: '#E8F5E9', border: '1px solid #A5D6A7', borderRadius: '8px', padding: '12px 16px', marginBottom: '1rem', color: '#2E7D32', fontSize: '13px' }}>
-          ✓ {success}
+        <div className="flex items-center gap-2 bg-[var(--color-success)]/10 border border-[var(--color-success)]/30 rounded-[var(--radius-md)] px-4 py-3 mb-4 text-[13px] text-[var(--color-success)]">
+          <CheckCircle size={16} weight="fill" />
+          {success}
         </div>
       )}
       {error && (
-        <div style={{ background: '#FFEBEE', border: '1px solid #FFCDD2', borderRadius: '8px', padding: '12px 16px', marginBottom: '1rem', color: '#B71C1C', fontSize: '13px' }}>
-          ✗ {error}
+        <div className="flex items-center gap-2 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/30 rounded-[var(--radius-md)] px-4 py-3 mb-4 text-[13px] text-[var(--color-danger)]">
+          <XCircle size={16} weight="fill" />
+          {error}
         </div>
       )}
 
@@ -155,66 +145,79 @@ export default function ImportView() {
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => fileRef.current?.click()}
-          style={{
-            border: `2px dashed ${dragOver ? '#1565C0' : '#E0E0E0'}`,
-            borderRadius: '12px', padding: '3rem', textAlign: 'center',
-            cursor: 'pointer', background: dragOver ? '#E3F2FD' : '#FAFAFA',
-            transition: 'all 0.2s',
-          }}
+          className={`border-2 border-dashed rounded-[var(--radius-lg)] p-12 text-center cursor-pointer transition-all ${
+            dragOver
+              ? 'border-[var(--color-info)] bg-[var(--color-info)]/10'
+              : 'border-[var(--color-border)] bg-[var(--color-surface-muted)]'
+          }`}
         >
-          <div style={{ fontSize: '40px', marginBottom: '12px' }}>📂</div>
-          <p style={{ fontSize: '15px', fontWeight: 500, marginBottom: '6px', color: '#111' }}>
+          <FolderOpen size={48} weight="duotone" className="mx-auto mb-3 text-neutral-400" />
+          <p className="text-[15px] font-medium text-neutral-900 mb-1.5">
             Drop your XLSX or CSV file here
           </p>
-          <p style={{ fontSize: '12px', color: '#888' }}>or click to browse</p>
+          <p className="text-[12px] text-neutral-400">or click to browse</p>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt"
-            style={{ display: 'none' }}
+            className="hidden"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-          {loading && <p style={{ marginTop: '1rem', color: '#666' }}>Parsing file...</p>}
+          {loading && <p className="mt-4 text-[13px] text-neutral-500">Parsing file...</p>}
         </div>
       )}
 
       {step === 'map' && (
-        <div>
-          <div style={{ background: '#E3F2FD', borderRadius: '8px', padding: '12px 16px', marginBottom: '1.5rem', fontSize: '13px', color: '#1565C0' }}>
-            📄 {filename} — {dataRowCount} data rows detected
+        <div className="flex flex-col gap-4">
+          {/* File info */}
+          <div className="flex items-center gap-2 bg-[var(--color-info)]/10 border border-[var(--color-info)]/30 rounded-[var(--radius-md)] px-4 py-3 text-[13px] text-[var(--color-info)]">
+            <FileText size={16} weight="fill" />
+            {filename} — {dataRowCount} data rows detected
           </div>
 
-          {/* Import target — NEW key addition */}
-          <div style={card}>
-            <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', color: '#111' }}>Import as</p>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
-              <button onClick={() => setImportTarget('new')} style={{
-                flex: 1, padding: '10px', borderRadius: '8px', fontSize: '13px',
-                fontWeight: 500, cursor: 'pointer', border: 'none',
-                background: importTarget === 'new' ? '#1C1C1E' : '#F5F5F5',
-                color: importTarget === 'new' ? '#fff' : '#444',
-              }}>
-                🆕 New Shoot
+          {/* Import target */}
+          <Card padding="md">
+            <p className="text-[13px] font-semibold text-neutral-900 mb-3">Import as</p>
+            <div className="flex gap-2.5 mb-3">
+              <button
+                onClick={() => setImportTarget('new')}
+                className={`flex-1 py-2.5 rounded-[var(--radius-md)] text-[13px] font-medium cursor-pointer border-none transition-colors ${
+                  importTarget === 'new'
+                    ? 'bg-[var(--color-brand)] text-white'
+                    : 'bg-[var(--color-surface-muted)] text-neutral-700'
+                }`}
+              >
+                New Shoot
               </button>
               <button
                 onClick={() => setImportTarget('existing')}
                 disabled={!activeShoot}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: '8px', fontSize: '13px',
-                  fontWeight: 500, cursor: activeShoot ? 'pointer' : 'default', border: 'none',
-                  background: importTarget === 'existing' ? '#1565C0' : '#F5F5F5',
-                  color: importTarget === 'existing' ? '#fff' : activeShoot ? '#444' : '#ccc',
-                }}>
-                ➕ Add to "{activeShoot?.name ?? 'no active shoot'}"
+                className={`flex-1 py-2.5 rounded-[var(--radius-md)] text-[13px] font-medium border-none transition-colors ${
+                  !activeShoot
+                    ? 'bg-[var(--color-surface-muted)] text-neutral-300 cursor-default'
+                    : importTarget === 'existing'
+                    ? 'bg-[var(--color-info)] text-white cursor-pointer'
+                    : 'bg-[var(--color-surface-muted)] text-neutral-700 cursor-pointer'
+                }`}
+              >
+                Add to "{activeShoot?.name ?? 'no active shoot'}"
               </button>
             </div>
 
             {importTarget === 'new' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label style={label11}>Shoot name</label>
-                  <input value={shootName} onChange={e => setShootName(e.target.value)}
-                    placeholder="e.g. Summer 2026" style={input} />
+                  <label className="text-[11px] text-neutral-500 block mb-1">Shoot name</label>
+                  <input
+                    value={shootName}
+                    onChange={e => setShootName(e.target.value)}
+                    placeholder="e.g. Summer 2026"
+                    className="w-full px-2 py-2 border border-[var(--color-border)] rounded-[var(--radius-md)] text-[13px] box-border"
+                  />
                 </div>
                 <div>
-                  <label style={label11}>Client (optional)</label>
-                  <select value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} style={{ ...input }}>
+                  <label className="text-[11px] text-neutral-500 block mb-1">Client (optional)</label>
+                  <select
+                    value={selectedClientId}
+                    onChange={e => setSelectedClientId(e.target.value)}
+                    className="w-full px-2 py-2 border border-[var(--color-border)] rounded-[var(--radius-md)] text-[13px] bg-white box-border"
+                  >
                     <option value="">— no client —</option>
                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -223,42 +226,52 @@ export default function ImportView() {
             )}
 
             <div>
-              <label style={label11}>Drop / batch name</label>
-              <input value={dropName} onChange={e => setDropName(e.target.value)}
-                placeholder="e.g. Drop 1" style={input} />
+              <label className="text-[11px] text-neutral-500 block mb-1">Drop / batch name</label>
+              <input
+                value={dropName}
+                onChange={e => setDropName(e.target.value)}
+                placeholder="e.g. Drop 1"
+                className="w-full px-2 py-2 border border-[var(--color-border)] rounded-[var(--radius-md)] text-[13px] box-border"
+              />
             </div>
-          </div>
+          </Card>
 
           {/* Import mode */}
-          <div style={card}>
-            <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '10px', color: '#111' }}>Import mode</p>
-            <div style={{ display: 'flex', gap: '10px' }}>
+          <Card padding="md">
+            <p className="text-[13px] font-semibold text-neutral-900 mb-2.5">Import mode</p>
+            <div className="flex gap-2.5">
               {(['jobList', 'mappingReference'] as const).map(mode => (
-                <button key={mode} onClick={() => setImportMode(mode)} style={{
-                  padding: '8px 16px', borderRadius: '7px', fontSize: '12px',
-                  fontWeight: 500, cursor: 'pointer', border: 'none',
-                  background: importMode === mode ? '#1C1C1E' : '#F5F5F5',
-                  color: importMode === mode ? '#fff' : '#444',
-                }}>
-                  {mode === 'jobList' ? '📋 Job List' : '📚 Mapping Reference'}
+                <button
+                  key={mode}
+                  onClick={() => setImportMode(mode)}
+                  className={`px-4 py-2 rounded-[var(--radius-md)] text-[12px] font-medium cursor-pointer border-none transition-colors ${
+                    importMode === mode
+                      ? 'bg-[var(--color-brand)] text-white'
+                      : 'bg-[var(--color-surface-muted)] text-neutral-700'
+                  }`}
+                >
+                  {mode === 'jobList' ? 'Job List' : 'Mapping Reference'}
                 </button>
               ))}
             </div>
-            <p style={{ fontSize: '11px', color: '#888', marginTop: '8px' }}>
+            <p className="text-[11px] text-neutral-400 mt-2">
               {importMode === 'jobList'
                 ? 'Every row is an expected item. Missing items are tracked.'
                 : 'Reference catalogue only. Scan items freely without tracking missing ones.'}
             </p>
-          </div>
+          </Card>
 
           {/* Column mapping */}
-          <div style={card}>
-            <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px', color: '#111' }}>Column mapping</p>
-            <p style={{ fontSize: '11px', color: '#888', marginBottom: '12px' }}>Map your file columns to StockShot fields.</p>
+          <Card padding="md">
+            <p className="text-[13px] font-semibold text-neutral-900 mb-1">Column mapping</p>
+            <p className="text-[11px] text-neutral-400 mb-3">Map your file columns to StockShot fields.</p>
 
-            <label style={{ fontSize: '12px', color: '#444', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <input type="checkbox" checked={mapping.hasHeaderRow}
-                onChange={e => setMapping(m => ({ ...m, hasHeaderRow: e.target.checked }))} />
+            <label className="text-[12px] text-neutral-600 flex items-center gap-2 mb-3">
+              <input
+                type="checkbox"
+                checked={mapping.hasHeaderRow}
+                onChange={e => setMapping(m => ({ ...m, hasHeaderRow: e.target.checked }))}
+              />
               First row is a header
             </label>
 
@@ -269,64 +282,66 @@ export default function ImportView() {
               { label: 'Description', key: 'descriptionColumn', nullable: true },
               { label: 'Product Type', key: 'productTypeColumn', nullable: true },
             ].map(({ label, key, nullable }) => (
-              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', width: '130px', color: '#444', flexShrink: 0 }}>{label}</span>
+              <div key={key} className="flex items-center gap-3 mb-2.5">
+                <span className="text-[12px] w-32 text-neutral-600 shrink-0">{label}</span>
                 <select
                   value={nullable ? ((mapping as any)[key] ?? '') : (mapping as any)[key]}
                   onChange={e => {
                     const val = e.target.value === '' ? null : parseInt(e.target.value)
                     setMapping(m => ({ ...m, [key]: val }))
                   }}
-                  style={select}
+                  className="px-2 py-1.5 border border-[var(--color-border)] rounded-[var(--radius-md)] text-[12px] flex-1 bg-white"
                 >
                   {nullable && <option value="">— not mapped —</option>}
                   {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
                 </select>
               </div>
             ))}
-          </div>
+          </Card>
 
           {/* Preview */}
           {rows.length > 0 && (
-            <div style={{ ...card, overflowX: 'auto' }}>
-              <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', color: '#111' }}>Preview (first 5 rows)</p>
-              <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+            <Card padding="md" className="overflow-x-auto">
+              <p className="text-[13px] font-semibold text-neutral-900 mb-3">Preview (first 5 rows)</p>
+              <table className="w-full text-[11px] border-collapse">
                 <thead>
-                  <tr>{headers.map((h, i) => (
-                    <th key={i} style={{ padding: '6px 8px', background: '#F5F5F5', textAlign: 'left', borderBottom: '1px solid #E0E0E0', color: '#444' }}>{h}</th>
-                  ))}</tr>
+                  <tr>
+                    {headers.map((h, i) => (
+                      <th key={i} className="px-2 py-1.5 bg-[var(--color-surface-muted)] text-left border-b border-[var(--color-border)] text-neutral-600">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody>
                   {rows.slice(1, 6).map((row, ri) => (
-                    <tr key={ri}>{row.map((cell, ci) => (
-                      <td key={ci} style={{ padding: '6px 8px', borderBottom: '1px solid #F5F5F5', color: '#555' }}>{cell}</td>
-                    ))}</tr>
+                    <tr key={ri}>
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="px-2 py-1.5 border-b border-[var(--color-border)]/50 text-neutral-600">
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
           )}
 
           {warnings.map((w, i) => (
-            <div key={i} style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '8px', padding: '10px 14px', marginBottom: '8px', fontSize: '12px', color: '#F57F17' }}>
-              ⚠ {w}
+            <div key={i} className="flex items-center gap-2 bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/30 rounded-[var(--radius-md)] px-4 py-2.5 text-[12px] text-[var(--color-warning)]">
+              <Warning size={14} weight="fill" />
+              {w}
             </div>
           ))}
 
-          <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
-            <button onClick={handleImport} style={{
-              padding: '10px 24px', background: '#1C1C1E', color: '#fff',
-              border: 'none', borderRadius: '8px', fontSize: '13px',
-              fontWeight: 500, cursor: 'pointer',
-            }}>
+          <div className="flex gap-2.5 mt-2">
+            <Button variant="primary" size="md" onClick={handleImport}>
               Import {dataRowCount} items
-            </button>
-            <button onClick={() => { setStep('upload'); setRows([]); setHeaders([]) }} style={{
-              padding: '10px 16px', background: '#F5F5F5', color: '#444',
-              border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
-            }}>
+            </Button>
+            <Button variant="secondary" size="md" onClick={() => { setStep('upload'); setRows([]); setHeaders([]) }}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
