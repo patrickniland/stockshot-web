@@ -1,7 +1,10 @@
 // StockShot — Admin: Trash (restore + permanent delete)
 
 import { useState } from 'react'
+import { Trash, ArrowCounterClockwise } from '@phosphor-icons/react'
 import useAppStore from '../../store/useAppStore'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
 
 export default function TrashView() {
   const getTrashedShoots = useAppStore(s => s.getTrashedShoots)
@@ -14,16 +17,16 @@ export default function TrashView() {
   const confirmShoot = trashedShoots.find(s => s.id === confirmId)
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '700px' }}>
-      <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111', marginBottom: '6px' }}>Trash</h2>
-      <p style={{ fontSize: '12px', color: '#888', marginBottom: '2rem' }}>
+    <div className="p-8 max-w-[700px]">
+      <h2 className="text-[18px] font-bold text-neutral-900 mb-1.5">Trash</h2>
+      <p className="text-[12px] text-neutral-400 mb-8">
         Shoots moved to trash are recoverable for 30 days. Permanent deletion cannot be undone.
       </p>
 
       {trashedShoots.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: '#aaa' }}>
-          <p style={{ fontSize: '32px', marginBottom: '10px' }}>🗑</p>
-          <p style={{ fontSize: '14px' }}>Trash is empty</p>
+        <div className="text-center py-12">
+          <Trash size={40} weight="duotone" className="mx-auto mb-2.5 text-neutral-300" />
+          <p className="text-[14px] text-neutral-400">Trash is empty</p>
         </div>
       ) : trashedShoots.map(shoot => {
         const deletedDate = new Date(shoot.deletedAt!)
@@ -31,98 +34,66 @@ export default function TrashView() {
         const daysLeft = Math.ceil((expiresMs - Date.now()) / (1000 * 60 * 60 * 24))
 
         return (
-          <div key={shoot.id} style={{
-            background: '#fff', border: '1px solid #FFCDD2', borderRadius: '10px',
-            padding: '16px', marginBottom: '10px',
-            display: 'flex', alignItems: 'center', gap: '12px',
-          }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>{shoot.name}</div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '3px' }}>
+          <div key={shoot.id} className="bg-white border border-[var(--color-danger)]/30 rounded-[var(--radius-lg)] px-4 py-4 mb-2.5 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-[14px] font-semibold text-neutral-700">{shoot.name}</div>
+              <div className="text-[11px] text-neutral-400 mt-0.5">
                 {shoot.items.length} items · Deleted {deletedDate.toLocaleDateString('en-ZA')} · {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
               </div>
             </div>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => restoreShoot(shoot)}
-              style={{
-                padding: '7px 14px', background: '#E8F5E9', color: '#2E7D32',
-                border: '1px solid #A5D6A7', borderRadius: '6px',
-                fontSize: '12px', fontWeight: 500, cursor: 'pointer', flexShrink: 0,
-              }}
+              className="shrink-0 text-[var(--color-success)] border-[var(--color-success)]/40 hover:bg-[var(--color-success)]/10"
             >
-              ↩ Restore
-            </button>
-            <button
+              <ArrowCounterClockwise size={13} className="mr-1" /> Restore
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               onClick={() => { setConfirmId(shoot.id); setConfirmInput('') }}
-              style={{
-                padding: '7px 14px', background: '#fff', color: '#B71C1C',
-                border: '1px solid #FFCDD2', borderRadius: '6px',
-                fontSize: '12px', cursor: 'pointer', flexShrink: 0,
-              }}
+              className="shrink-0"
             >
               Delete Forever
-            </button>
+            </Button>
           </div>
         )
       })}
 
       {/* Permanent delete confirmation */}
       {confirmShoot && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
-        }}>
-          <div style={{
-            background: '#fff', borderRadius: '12px', padding: '28px 32px',
-            width: '380px', boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
-          }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#B71C1C', marginBottom: '10px' }}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
+          <Card padding="lg" className="w-[380px] shadow-[0_8px_40px_rgba(0,0,0,0.18)]">
+            <h3 className="text-[16px] font-bold text-[var(--color-danger)] mb-2.5">
               Permanently delete shoot?
             </h3>
-            <p style={{ fontSize: '13px', color: '#555', marginBottom: '16px' }}>
+            <p className="text-[13px] text-neutral-600 mb-4">
               This will permanently delete <strong>{confirmShoot.name}</strong> and all {confirmShoot.items.length} items. This cannot be undone.
             </p>
-            <p style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+            <p className="text-[12px] text-neutral-400 mb-2">
               Type the shoot name to confirm:
             </p>
             <input
               value={confirmInput}
               onChange={e => setConfirmInput(e.target.value)}
               placeholder={confirmShoot.name}
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '8px 10px',
-                border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '13px',
-                outline: 'none', marginBottom: '16px',
-              }}
+              className="w-full box-border px-2.5 py-2 border border-[var(--color-border)] rounded-md text-[13px] outline-none mb-4"
             />
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => {
-                  permanentlyDeleteShoot(confirmShoot)
-                  setConfirmId(null)
-                  setConfirmInput('')
-                }}
+            <div className="flex gap-2.5">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => { permanentlyDeleteShoot(confirmShoot); setConfirmId(null); setConfirmInput('') }}
                 disabled={confirmInput !== confirmShoot.name}
-                style={{
-                  padding: '9px 20px', background: confirmInput === confirmShoot.name ? '#B71C1C' : '#E0E0E0',
-                  color: confirmInput === confirmShoot.name ? '#fff' : '#999',
-                  border: 'none', borderRadius: '8px', fontSize: '13px',
-                  fontWeight: 600, cursor: confirmInput === confirmShoot.name ? 'pointer' : 'default',
-                }}
               >
                 Delete Forever
-              </button>
-              <button
-                onClick={() => { setConfirmId(null); setConfirmInput('') }}
-                style={{
-                  padding: '9px 16px', background: 'transparent', border: '1px solid #E0E0E0',
-                  borderRadius: '8px', fontSize: '13px', color: '#555', cursor: 'pointer',
-                }}
-              >
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setConfirmId(null); setConfirmInput('') }}>
                 Cancel
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>

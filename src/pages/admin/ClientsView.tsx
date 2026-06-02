@@ -3,9 +3,12 @@
 
 import { useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { Buildings, X } from '@phosphor-icons/react'
 import useAppStore from '../../store/useAppStore'
 import { useNavSync } from '../../hooks/useNavSync'
 import { Client, ProductType, ShotAngle } from '../../types'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
 
 export default function ClientsView() {
   useNavSync({ onEnter: 'pull', onLeave: 'push' })
@@ -37,63 +40,48 @@ export default function ClientsView() {
   }
 
   return (
-    <div style={{ padding: '1.5rem', maxWidth: '760px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#111', margin: 0 }}>Clients</h1>
-        <div style={{ flex: 1 }} />
-        <button onClick={newClient} style={{
-          padding: '8px 16px', background: '#1C1C1E', color: '#fff',
-          border: 'none', borderRadius: '7px', fontSize: '12px', cursor: 'pointer', fontWeight: 500,
-        }}>
-          + New Client
-        </button>
+    <div className="p-6 max-w-[760px]">
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-[22px] font-semibold text-neutral-900 m-0">Clients</h1>
+        <div className="flex-1" />
+        <Button variant="primary" size="sm" onClick={newClient}>+ New Client</Button>
       </div>
 
       {clients.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
-          <p style={{ fontSize: '40px', marginBottom: '12px' }}>🏢</p>
-          <p style={{ fontWeight: 500, color: '#111', marginBottom: '6px' }}>No clients yet</p>
-          <p style={{ fontSize: '12px', marginBottom: '16px' }}>Create a client to define product types and required shot angles.</p>
-          <button onClick={newClient} style={{ padding: '10px 20px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
-            Create First Client
-          </button>
+        <div className="text-center py-8">
+          <Buildings size={48} weight="duotone" className="mx-auto mb-3 text-neutral-400" />
+          <p className="font-medium text-neutral-900 mb-1.5">No clients yet</p>
+          <p className="text-[12px] text-neutral-500 mb-4">Create a client to define product types and required shot angles.</p>
+          <Button variant="primary" size="md" onClick={newClient}>Create First Client</Button>
         </div>
       ) : clients.map(client => (
-        <div key={client.id} style={{
-          background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px',
-          padding: '16px', marginBottom: '10px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>{client.name}</div>
-              <div style={{ fontSize: '11px', color: '#888' }}>
+        <Card key={client.id} padding="md" className="mb-2.5">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-[15px] font-semibold text-neutral-900 mb-1">{client.name}</div>
+              <div className="text-[11px] text-neutral-400">
                 {client.productTypes.length} product type{client.productTypes.length !== 1 ? 's' : ''} ·
                 Created {new Date(client.createdAt).toLocaleDateString('en-ZA')}
               </div>
               {client.productTypes.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                <div className="flex flex-wrap gap-1.5 mt-2">
                   {client.productTypes.map(pt => (
-                    <div key={pt.id} style={{ background: '#F5F5F5', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', color: '#444' }}>
-                      <span style={{ fontWeight: 600 }}>{pt.name}</span>
+                    <div key={pt.id} className="bg-[var(--color-surface-muted)] rounded-md px-2.5 py-1 text-[11px] text-neutral-700">
+                      <span className="font-semibold">{pt.name}</span>
                       {pt.requiredAngles.length > 0 && (
-                        <span style={{ color: '#888' }}> · {pt.requiredAngles.map(a => a.name).join(', ')}</span>
+                        <span className="text-neutral-400"> · {pt.requiredAngles.map(a => a.name).join(', ')}</span>
                       )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setEditing(client)} style={{ padding: '6px 12px', background: '#F5F5F5', border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#444' }}>
-                Edit
-              </button>
-              <button onClick={() => { if (confirm(`Delete ${client.name}?`)) deleteClient(client.id) }}
-                style={{ padding: '6px 12px', background: '#fff', border: '1px solid #FFCDD2', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#B71C1C' }}>
-                Delete
-              </button>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setEditing(client)}>Edit</Button>
+              <Button variant="danger" size="sm" onClick={() => { if (confirm(`Delete ${client.name}?`)) deleteClient(client.id) }}>Delete</Button>
             </div>
           </div>
-        </div>
+        </Card>
       ))}
     </div>
   )
@@ -142,95 +130,95 @@ function ClientEditor({ client, onChange, onSave, onCancel }: {
     updatePT(ptId, { requiredAngles: pt.requiredAngles.filter(a => a.id !== angleId) })
   }
 
-  const input: React.CSSProperties = {
-    padding: '7px 10px', border: '1px solid #E0E0E0', borderRadius: '6px',
-    fontSize: '13px', outline: 'none',
-  }
-
   return (
-    <div style={{ padding: '1.5rem', maxWidth: '720px' }}>
-      <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#111', marginBottom: '1.5rem' }}>
+    <div className="p-6 max-w-[720px]">
+      <h1 className="text-[20px] font-semibold text-neutral-900 mb-6">
         {client.name || 'New Client'}
       </h1>
 
       {/* Client name */}
-      <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1rem' }}>
-        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '6px' }}>Client name</label>
-        <input value={client.name} onChange={e => onChange({ ...client, name: e.target.value })}
-          placeholder="e.g. ASOS, Zalando, Next" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
-      </div>
+      <Card padding="md" className="mb-4">
+        <label className="text-[11px] text-neutral-500 block mb-1.5">Client name</label>
+        <input
+          value={client.name}
+          onChange={e => onChange({ ...client, name: e.target.value })}
+          placeholder="e.g. ASOS, Zalando, Next"
+          className="w-full px-2.5 py-1.5 text-[13px] border border-[var(--color-border)] rounded-md outline-none box-border"
+        />
+      </Card>
 
       {/* Product types */}
-      <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#111', flex: 1 }}>Product types & required angles</span>
-          <button onClick={addProductType} style={{ padding: '5px 12px', background: '#F5F5F5', border: '1px solid #E0E0E0', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#444' }}>
-            + Add type
-          </button>
+      <Card padding="md" className="mb-4">
+        <div className="flex items-center mb-3">
+          <span className="text-[13px] font-semibold text-neutral-900 flex-1">Product types & required angles</span>
+          <Button variant="secondary" size="sm" onClick={addProductType}>+ Add type</Button>
         </div>
 
         {client.productTypes.length === 0 ? (
-          <p style={{ fontSize: '12px', color: '#aaa', textAlign: 'center', padding: '1rem 0' }}>
+          <p className="text-[12px] text-neutral-300 text-center py-4">
             No product types yet. Add one to define required shot angles.
           </p>
         ) : client.productTypes.map(pt => (
-          <div key={pt.id} style={{ border: '1px solid #F0F0F0', borderRadius: '8px', padding: '12px', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <input value={pt.name} onChange={e => updatePT(pt.id, { name: e.target.value })}
+          <div key={pt.id} className="border border-[var(--color-border)]/60 rounded-lg p-3 mb-2.5">
+            <div className="flex items-center gap-2.5 mb-2.5">
+              <input
+                value={pt.name}
+                onChange={e => updatePT(pt.id, { name: e.target.value })}
                 placeholder="Product type (e.g. Tops, Footwear)"
-                style={{ ...input, flex: 1 }} />
-              <button onClick={() => removePT(pt.id)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '16px' }}>✕</button>
+                className="flex-1 px-2.5 py-1.5 text-[13px] border border-[var(--color-border)] rounded-md outline-none"
+              />
+              <button onClick={() => removePT(pt.id)} className="bg-transparent border-none text-neutral-300 cursor-pointer flex items-center hover:text-neutral-500">
+                <X size={16} />
+              </button>
             </div>
 
             {/* Aliases */}
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '4px' }}>
+            <div className="mb-2.5">
+              <label className="text-[10px] text-neutral-400 block mb-1">
                 Aliases for auto-mapping (comma separated, e.g. TOP, 01, T)
               </label>
               <input
                 defaultValue={pt.aliases.join(', ')}
                 onBlur={e => updatePT(pt.id, { aliases: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
                 placeholder="TOP, 01, T"
-                style={{ ...input, width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                className="w-full px-2.5 py-1.5 text-[12px] border border-[var(--color-border)] rounded-md outline-none box-border"
               />
             </div>
 
             {/* Angles */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ fontSize: '10px', color: '#888', flex: 1 }}>Required angles</span>
-                <button onClick={() => addAngle(pt.id)} style={{ background: 'none', border: 'none', color: '#1565C0', cursor: 'pointer', fontSize: '11px' }}>
+              <div className="flex items-center mb-1.5">
+                <span className="text-[10px] text-neutral-400 flex-1">Required angles</span>
+                <button onClick={() => addAngle(pt.id)} className="bg-transparent border-none text-[var(--color-info)] cursor-pointer text-[11px] hover:underline">
                   + Add angle
                 </button>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <div className="flex flex-wrap gap-1.5">
                 {pt.requiredAngles.map(angle => (
-                  <div key={angle.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#F5F5F5', borderRadius: '6px', padding: '4px 8px' }}>
-                    <input value={angle.name} onChange={e => updateAngle(pt.id, angle.id, e.target.value)}
+                  <div key={angle.id} className="flex items-center gap-1 bg-[var(--color-surface-muted)] rounded-md px-2 py-1">
+                    <input
+                      value={angle.name}
+                      onChange={e => updateAngle(pt.id, angle.id, e.target.value)}
                       placeholder="e.g. Front"
-                      style={{ border: 'none', background: 'transparent', fontSize: '12px', width: '80px', outline: 'none' }} />
-                    <button onClick={() => removeAngle(pt.id, angle.id)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '12px', padding: 0 }}>✕</button>
+                      className="border-none bg-transparent text-[12px] w-20 outline-none"
+                    />
+                    <button onClick={() => removeAngle(pt.id, angle.id)} className="bg-transparent border-none text-neutral-300 cursor-pointer flex items-center p-0 hover:text-neutral-500">
+                      <X size={12} />
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         ))}
-      </div>
+      </Card>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: '10px' }}>
-        <button onClick={onSave} disabled={!client.name.trim()} style={{
-          padding: '10px 24px', background: !client.name.trim() ? '#E0E0E0' : '#1C1C1E',
-          color: !client.name.trim() ? '#999' : '#fff',
-          border: 'none', borderRadius: '8px', fontSize: '13px',
-          fontWeight: 500, cursor: client.name.trim() ? 'pointer' : 'default',
-        }}>
+      <div className="flex gap-2.5">
+        <Button variant="primary" size="md" onClick={onSave} disabled={!client.name.trim()}>
           Save Client
-        </button>
-        <button onClick={onCancel} style={{ padding: '10px 16px', background: '#F5F5F5', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#444' }}>
-          Cancel
-        </button>
+        </Button>
+        <Button variant="secondary" size="md" onClick={onCancel}>Cancel</Button>
       </div>
     </div>
   )

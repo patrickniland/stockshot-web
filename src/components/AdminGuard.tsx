@@ -34,20 +34,12 @@ function AdminBanner() {
   }
 
   return (
-    <div style={{
-      background: '#1C1C1E', color: '#aaa',
-      fontSize: '11px', padding: '6px 16px',
-      display: 'flex', alignItems: 'center', gap: '12px',
-      borderBottom: '1px solid #333',
-    }}>
-      <span style={{ color: '#888' }}>Admin mode — {minsLeft} min remaining</span>
-      <div style={{ flex: 1 }} />
+    <div className="bg-[var(--color-brand)] text-neutral-400 text-[11px] px-4 py-1.5 flex items-center gap-3 border-b border-neutral-800">
+      <span>Admin mode — {minsLeft} min remaining</span>
+      <div className="flex-1" />
       <button
         onClick={handleLock}
-        style={{
-          background: 'none', border: '1px solid #444', borderRadius: '5px',
-          color: '#888', fontSize: '11px', padding: '3px 10px', cursor: 'pointer',
-        }}
+        className="bg-transparent border border-neutral-600 rounded-md text-neutral-400 text-[11px] px-2.5 py-1 cursor-pointer hover:border-neutral-400 transition-colors"
       >
         Lock now
       </button>
@@ -57,23 +49,18 @@ function AdminBanner() {
 
 function AdminSubNav() {
   return (
-    <div style={{
-      background: '#F5F5F5', borderBottom: '1px solid #E0E0E0',
-      padding: '0 24px', display: 'flex', gap: '2px',
-    }}>
+    <div className="bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] px-6 flex gap-0.5">
       {ADMIN_NAV.map(({ to, label }) => (
         <NavLink
           key={to}
           to={to}
-          style={({ isActive }) => ({
-            padding: '10px 14px',
-            fontSize: '13px',
-            fontWeight: isActive ? 600 : 400,
-            color: isActive ? '#1C1C1E' : '#888',
-            textDecoration: 'none',
-            borderBottom: isActive ? '2px solid #1C1C1E' : '2px solid transparent',
-            marginBottom: '-1px',
-          })}
+          className={({ isActive }) =>
+            `px-3.5 py-2.5 text-[13px] no-underline border-b-2 -mb-px transition-colors ${
+              isActive
+                ? 'font-semibold text-[var(--color-brand)] border-[var(--color-brand)]'
+                : 'font-normal text-neutral-400 border-transparent'
+            }`
+          }
         >
           {label}
         </NavLink>
@@ -100,7 +87,6 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   }, [isAdminElevated])
 
   if (hasPinSet === null) {
-    // Still loading — blank while checking
     return null
   }
 
@@ -115,10 +101,10 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="flex flex-col h-full">
       <AdminBanner />
       <AdminSubNav />
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="flex-1 overflow-y-auto">
         {children}
       </div>
     </div>

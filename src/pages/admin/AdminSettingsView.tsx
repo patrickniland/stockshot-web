@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import useAppStore from '../../store/useAppStore'
 import { supabase } from '../../lib/supabase'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
 
 const OBVIOUS_PINS = new Set(['000000','111111','222222','333333','444444','555555','666666','777777','888888','999999','123456','654321','121212','112233'])
 
@@ -14,7 +16,7 @@ function PinDigits({ digits, refs, onChange, onKeyDown, disabled }: {
   disabled?: boolean
 }) {
   return (
-    <div style={{ display: 'flex', gap: '8px', margin: '6px 0' }}>
+    <div className="flex gap-2 my-1.5">
       {digits.map((d, i) => (
         <input
           key={i}
@@ -24,12 +26,9 @@ function PinDigits({ digits, refs, onChange, onKeyDown, disabled }: {
           onChange={e => onChange(i, e.target.value.replace(/\D/g, '').slice(-1))}
           onKeyDown={e => onKeyDown(e, i)}
           disabled={disabled}
-          style={{
-            width: '38px', height: '44px', textAlign: 'center',
-            fontSize: '18px', fontWeight: 700, caretColor: 'transparent',
-            border: `2px solid ${d ? '#1C1C1E' : '#E0E0E0'}`, borderRadius: '8px', outline: 'none',
-            background: disabled ? '#F5F5F5' : '#fff',
-          }}
+          className={`w-10 h-11 text-center text-[18px] font-bold [caret-color:transparent] border-2 rounded-lg outline-none transition-colors ${
+            d ? 'border-[var(--color-brand)]' : 'border-[var(--color-border)]'
+          } ${disabled ? 'bg-[var(--color-surface-muted)]' : 'bg-white'}`}
         />
       ))}
     </div>
@@ -41,7 +40,6 @@ export default function AdminSettingsView() {
   const setupInitialPin = useAppStore(s => s.setupInitialPin)
   const orgId = useAppStore(s => s.orgId)
 
-  // Org name
   const [orgName, setOrgName] = useState('')
   const [orgSaved, setOrgSaved] = useState(false)
   const [orgLoading, setOrgLoading] = useState(false)
@@ -61,7 +59,6 @@ export default function AdminSettingsView() {
     setTimeout(() => setOrgSaved(false), 2000)
   }
 
-  // Change PIN flow state
   const [pinStep, setPinStep] = useState<'idle' | 'verify-current' | 'set-new'>('idle')
   const [curPin, setCurPin] = useState(['', '', '', '', '', ''])
   const [newPin, setNewPin] = useState(['', '', '', '', '', ''])
@@ -131,90 +128,83 @@ export default function AdminSettingsView() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '560px' }}>
-      <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111', marginBottom: '2rem' }}>Settings</h2>
+    <div className="p-8 max-w-[560px]">
+      <h2 className="text-[18px] font-bold text-neutral-900 mb-8">Settings</h2>
 
       {/* Organisation */}
-      <section style={card}>
-        <h3 style={sectionHead}>Organisation</h3>
-        <label style={labelStyle}>Org name</label>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+      <Card padding="md" className="mb-6">
+        <h3 className="text-[14px] font-bold text-neutral-900 mb-3.5">Organisation</h3>
+        <label className="block text-[11px] font-semibold text-neutral-500 mb-1">Org name</label>
+        <div className="flex gap-2.5 items-center">
           <input
             value={orgName}
             onChange={e => setOrgName(e.target.value)}
-            style={{ ...inputStyle, flex: 1 }}
+            className="flex-1 px-2.5 py-2 text-[13px] border border-[var(--color-border)] rounded-md outline-none"
           />
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={saveOrgName}
             disabled={orgLoading || !orgName.trim()}
-            style={{ ...primaryBtn, opacity: orgName.trim() ? 1 : 0.4 }}
           >
-            {orgSaved ? '✓ Saved' : orgLoading ? 'Saving…' : 'Save'}
-          </button>
+            {orgSaved ? 'Saved' : orgLoading ? 'Saving...' : 'Save'}
+          </Button>
         </div>
-      </section>
+      </Card>
 
       {/* Admin PIN */}
-      <section style={card}>
-        <h3 style={sectionHead}>Admin PIN</h3>
+      <Card padding="md" className="mb-6">
+        <h3 className="text-[14px] font-bold text-neutral-900 mb-3.5">Admin PIN</h3>
 
         {pinStep === 'idle' && (
           <>
             {pinDone && (
-              <p style={{ fontSize: '13px', color: '#2E7D32', marginBottom: '12px', fontWeight: 600 }}>✓ PIN updated</p>
+              <p className="text-[13px] text-[var(--color-success)] mb-3 font-semibold">PIN updated</p>
             )}
-            <button onClick={() => { setPinStep('verify-current'); setPinError(null) }} style={primaryBtn}>
+            <Button variant="primary" size="sm" onClick={() => { setPinStep('verify-current'); setPinError(null) }}>
               Change PIN
-            </button>
+            </Button>
           </>
         )}
 
         {pinStep === 'verify-current' && (
           <>
-            <p style={{ fontSize: '13px', color: '#555', marginBottom: '12px' }}>Enter your current PIN to continue.</p>
-            <label style={labelStyle}>Current PIN</label>
+            <p className="text-[13px] text-neutral-600 mb-3">Enter your current PIN to continue.</p>
+            <label className="block text-[11px] font-semibold text-neutral-500 mb-1">Current PIN</label>
             <PinDigits digits={curPin} refs={curRefs} onChange={(i, v) => handleDigit(i, v, curPin, setCurPin, curRefs)} onKeyDown={(e, i) => handleKeyDown(e, i, curPin, setCurPin, curRefs)} disabled={pinLoading} />
-            {pinError && <p style={errorStyle}>{pinError}</p>}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
-              <button onClick={verifyCurrentPin} disabled={pinLoading || curPin.join('').length !== 6} style={{ ...primaryBtn, opacity: curPin.join('').length === 6 ? 1 : 0.4 }}>
-                {pinLoading ? 'Checking…' : 'Next'}
-              </button>
-              <button onClick={cancelPinChange} style={ghostBtn}>Cancel</button>
+            {pinError && <p className="text-[12px] text-[var(--color-danger)] mt-1.5">{pinError}</p>}
+            <div className="flex gap-2.5 mt-3.5">
+              <Button variant="primary" size="sm" onClick={verifyCurrentPin} disabled={pinLoading || curPin.join('').length !== 6}>
+                {pinLoading ? 'Checking...' : 'Next'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={cancelPinChange}>Cancel</Button>
             </div>
           </>
         )}
 
         {pinStep === 'set-new' && (
           <>
-            <p style={{ fontSize: '13px', color: '#555', marginBottom: '12px' }}>Choose your new PIN.</p>
-            <label style={labelStyle}>New PIN</label>
+            <p className="text-[13px] text-neutral-600 mb-3">Choose your new PIN.</p>
+            <label className="block text-[11px] font-semibold text-neutral-500 mb-1">New PIN</label>
             <PinDigits digits={newPin} refs={newRefs} onChange={(i, v) => handleDigit(i, v, newPin, setNewPin, newRefs, newConfirmRefs)} onKeyDown={(e, i) => handleKeyDown(e, i, newPin, setNewPin, newRefs)} disabled={pinLoading} />
-            <label style={{ ...labelStyle, marginTop: '12px' }}>Confirm new PIN</label>
+            <label className="block text-[11px] font-semibold text-neutral-500 mb-1 mt-3">Confirm new PIN</label>
             <PinDigits digits={newPinConfirm} refs={newConfirmRefs} onChange={(i, v) => handleDigit(i, v, newPinConfirm, setNewPinConfirm, newConfirmRefs)} onKeyDown={(e, i) => handleKeyDown(e, i, newPinConfirm, setNewPinConfirm, newConfirmRefs)} disabled={pinLoading} />
-            {pinError && <p style={errorStyle}>{pinError}</p>}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
-              <button onClick={applyNewPin} disabled={pinLoading || newPin.join('').length !== 6 || newPinConfirm.join('').length !== 6} style={{ ...primaryBtn, opacity: newPin.join('').length === 6 && newPinConfirm.join('').length === 6 ? 1 : 0.4 }}>
-                {pinLoading ? 'Saving…' : 'Save PIN'}
-              </button>
-              <button onClick={cancelPinChange} style={ghostBtn}>Cancel</button>
+            {pinError && <p className="text-[12px] text-[var(--color-danger)] mt-1.5">{pinError}</p>}
+            <div className="flex gap-2.5 mt-3.5">
+              <Button variant="primary" size="sm" onClick={applyNewPin} disabled={pinLoading || newPin.join('').length !== 6 || newPinConfirm.join('').length !== 6}>
+                {pinLoading ? 'Saving...' : 'Save PIN'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={cancelPinChange}>Cancel</Button>
             </div>
           </>
         )}
-      </section>
+      </Card>
 
       {/* Account */}
-      <section style={card}>
-        <h3 style={sectionHead}>Account</h3>
-        <button onClick={() => supabase.auth.signOut()} style={ghostBtn}>Sign out</button>
-      </section>
+      <Card padding="md">
+        <h3 className="text-[14px] font-bold text-neutral-900 mb-3.5">Account</h3>
+        <Button variant="secondary" size="sm" onClick={() => supabase.auth.signOut()}>Sign out</Button>
+      </Card>
     </div>
   )
 }
-
-const card: React.CSSProperties = { background: '#fff', border: '1px solid #E0E0E0', borderRadius: '12px', padding: '20px', marginBottom: '1.5rem' }
-const sectionHead: React.CSSProperties = { fontSize: '14px', fontWeight: 700, color: '#111', marginBottom: '14px' }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', marginBottom: '4px' }
-const inputStyle: React.CSSProperties = { padding: '8px 10px', fontSize: '13px', border: '1px solid #E0E0E0', borderRadius: '6px', outline: 'none' }
-const primaryBtn: React.CSSProperties = { padding: '9px 20px', background: '#1C1C1E', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
-const ghostBtn: React.CSSProperties = { padding: '9px 16px', background: 'transparent', border: '1px solid #E0E0E0', borderRadius: '8px', fontSize: '13px', color: '#555', cursor: 'pointer' }
-const errorStyle: React.CSSProperties = { fontSize: '12px', color: '#B71C1C', marginTop: '6px' }
