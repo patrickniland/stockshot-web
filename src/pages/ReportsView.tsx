@@ -1,7 +1,9 @@
 // StockShot — Dashboard / Reports View
 
+import { ChartBar } from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
+import { Card } from '../components/ui/Card'
 
 export default function ReportsView() {
   useNavSync({ onEnter: 'pull' })
@@ -45,114 +47,123 @@ export default function ReportsView() {
 
   if (!shoot) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>
-        <p style={{ fontSize: '40px', marginBottom: '12px' }}>📊</p>
-        <p style={{ fontWeight: 500 }}>No active shoot</p>
+      <div className="p-8 text-center">
+        <ChartBar size={48} weight="duotone" className="mx-auto mb-3 text-neutral-400" />
+        <p className="font-medium text-neutral-500">No active shoot</p>
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '1.5rem 2rem', maxWidth: '860px' }}>
+    <div className="px-8 py-6 max-w-[860px]">
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#111', margin: 0 }}>Dashboard</h1>
-        <span style={{ fontSize: '14px', color: '#666' }}>— {shoot.name}</span>
+      <div className="flex items-baseline gap-3 mb-6">
+        <h1 className="text-[22px] font-semibold text-neutral-900 m-0">Dashboard</h1>
+        <span className="text-[14px] text-neutral-500">— {shoot.name}</span>
         {clientName(shoot.clientId) && (
-          <span style={{ fontSize: '12px', color: '#888' }}>({clientName(shoot.clientId)})</span>
+          <span className="text-[12px] text-neutral-400">({clientName(shoot.clientId)})</span>
         )}
       </div>
 
       {/* KPI tiles — row 1: custody overview */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
-        <KpiTile value={mapped}   label="Mapped"    color="#999"    />
-        <KpiTile value={active}   label="Active"    color="#2E7D32" />
-        <KpiTile value={atStudio} label="At Studio" color="#1565C0" />
-        <KpiTile value={atClient} label="At Client" color="#E65100" />
+      <div className="grid grid-cols-4 gap-3 mb-3">
+        <KpiTile value={mapped}   label="Mapped"    token="muted"   />
+        <KpiTile value={active}   label="Active"    token="success" />
+        <KpiTile value={atStudio} label="At Studio" token="info"    />
+        <KpiTile value={atClient} label="At Client" token="warning" />
       </div>
 
       {/* KPI tiles — row 2: shot progress */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-        <KpiTile value={`${shot.length}/${shotBase}`} label="Shot"          color="#7B1FA2" />
-        <KpiTile value={toShoot}                      label="Left to Shoot" color="#E65100" />
-        <KpiTile value={inTransit}                    label="In Transit"    color="#1565C0" />
-        <KpiTile value={notRequired}                  label="N/A"           color="#999"    />
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <KpiTile value={`${shot.length}/${shotBase}`} label="Shot"          token="accent"  />
+        <KpiTile value={toShoot}                      label="Left to Shoot" token="warning" />
+        <KpiTile value={inTransit}                    label="In Transit"    token="info"    />
+        <KpiTile value={notRequired}                  label="N/A"           token="muted"   />
       </div>
 
       {/* Progress bars */}
-      <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem' }}>
-        <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '14px' }}>Progress</p>
-
-        <ProgressBar label="Active (of total imported)" value={active}       total={total}    color="#2E7D32" />
-        <ProgressBar label="At Studio"                value={atStudio}     total={active}   color="#1565C0" />
-        <ProgressBar label="Shot (of active)"         value={shot.length}  total={shotBase} color="#7B1FA2" />
-        <ProgressBar label="Left to shoot"            value={toShoot}      total={active}   color="#E65100" />
-
+      <Card padding="md" className="mb-6">
+        <p className="text-[13px] font-semibold text-neutral-500 mb-3.5">Progress</p>
+        <ProgressBar label="Active (of total imported)" value={active}      total={total}    bgClass="bg-[var(--color-success)]" />
+        <ProgressBar label="At Studio"                  value={atStudio}    total={active}   bgClass="bg-[var(--color-info)]" />
+        <ProgressBar label="Shot (of active)"           value={shot.length} total={shotBase} bgClass="bg-[var(--color-accent)]" />
+        <ProgressBar label="Left to shoot"              value={toShoot}     total={active}   bgClass="bg-[var(--color-warning)]" />
         {itemsWithAngles.length > 0 && (
           <>
-            <ProgressBar label="All angles complete" value={fullyShot}      total={itemsWithAngles.length} color="#7B1FA2" />
-            <ProgressBar label="Partially shot"      value={partiallyShot}  total={itemsWithAngles.length} color="#E65100" />
+            <ProgressBar label="All angles complete" value={fullyShot}     total={itemsWithAngles.length} bgClass="bg-[var(--color-accent)]" />
+            <ProgressBar label="Partially shot"      value={partiallyShot} total={itemsWithAngles.length} bgClass="bg-[var(--color-warning)]" />
           </>
         )}
-      </div>
+      </Card>
 
       {/* Angle completion detail */}
       {itemsWithAngles.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem' }}>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '12px' }}>Angle Tracking</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-            <KpiTile value={`${fullyShot}/${itemsWithAngles.length}`}    label="All Angles Done"    color="#7B1FA2" />
-            <KpiTile value={partiallyShot}                               label="Partially Shot"     color="#E65100" />
-            <KpiTile value={itemsWithAngles.length - fullyShot - partiallyShot} label="Not Started" color="#999" />
+        <Card padding="md" className="mb-6">
+          <p className="text-[13px] font-semibold text-neutral-500 mb-3">Angle Tracking</p>
+          <div className="grid grid-cols-3 gap-2.5">
+            <KpiTile value={`${fullyShot}/${itemsWithAngles.length}`}            label="All Angles Done" token="accent"  />
+            <KpiTile value={partiallyShot}                                        label="Partially Shot"  token="warning" />
+            <KpiTile value={itemsWithAngles.length - fullyShot - partiallyShot}  label="Not Started"     token="muted"   />
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Drop breakdown */}
       {shoot.drops.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: '10px', padding: '1.25rem' }}>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '12px' }}>Drops / Batches</p>
+        <Card padding="md">
+          <p className="text-[13px] font-semibold text-neutral-500 mb-3">Drops / Batches</p>
           {shoot.drops.map(drop => (
-            <div key={drop.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 0', borderBottom: '1px solid #F5F5F5' }}>
-              <span style={{ fontSize: '12px', color: '#444', flex: 1 }}>{drop.name}</span>
-              <span style={{
-                fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '3px',
-                background: drop.importMode === 'jobList' ? '#E8F5E9' : '#E3F2FD',
-                color: drop.importMode === 'jobList' ? '#2E7D32' : '#1565C0',
-              }}>
+            <div key={drop.id} className="flex items-center gap-2.5 py-1.5 border-b border-[var(--color-border)]/50 last:border-0">
+              <span className="text-[12px] text-neutral-700 flex-1">{drop.name}</span>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                drop.importMode === 'jobList'
+                  ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                  : 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
+              }`}>
                 {drop.importMode === 'jobList' ? 'Job List' : 'Reference'}
               </span>
-              <span style={{ fontSize: '11px', color: '#888' }}>{drop.itemCount} items</span>
-              <span style={{ fontSize: '10px', color: '#aaa' }}>{new Date(drop.importedAt).toLocaleDateString('en-ZA')}</span>
+              <span className="text-[11px] text-neutral-400">{drop.itemCount} items</span>
+              <span className="text-[10px] text-neutral-300">{new Date(drop.importedAt).toLocaleDateString('en-ZA')}</span>
             </div>
           ))}
-        </div>
+        </Card>
       )}
 
     </div>
   )
 }
 
-function KpiTile({ value, label, color }: { value: number | string; label: string; color: string }) {
+type TokenColor = 'success' | 'warning' | 'info' | 'accent' | 'muted'
+
+const TOKEN_MAP: Record<TokenColor, { value: string; border: string }> = {
+  success: { value: 'text-[var(--color-success)]', border: 'border-[var(--color-success)]/20' },
+  warning: { value: 'text-[var(--color-warning)]', border: 'border-[var(--color-warning)]/20' },
+  info:    { value: 'text-[var(--color-info)]',    border: 'border-[var(--color-info)]/20'    },
+  accent:  { value: 'text-[var(--color-accent)]',  border: 'border-[var(--color-accent)]/20'  },
+  muted:   { value: 'text-neutral-400',            border: 'border-neutral-200'               },
+}
+
+function KpiTile({ value, label, token }: { value: number | string; label: string; token: TokenColor }) {
+  const { value: valueClass, border: borderClass } = TOKEN_MAP[token]
   return (
-    <div style={{ background: '#fff', border: `1.5px solid ${color}22`, borderRadius: '10px', padding: '20px 12px', textAlign: 'center' }}>
-      <div style={{ fontSize: '32px', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{label}</div>
+    <div className={`bg-white border ${borderClass} rounded-[var(--radius-lg)] py-5 px-3 text-center`}>
+      <div className={`text-[32px] font-bold tabular-nums ${valueClass}`}>{value}</div>
+      <div className="text-[11px] text-neutral-500 mt-0.5">{label}</div>
     </div>
   )
 }
 
-function ProgressBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+function ProgressBar({ label, value, total, bgClass }: { label: string; value: number; total: number; bgClass: string }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0
   return (
-    <div style={{ marginBottom: '12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-        <span style={{ fontSize: '12px', color: '#111' }}>{label}</span>
-        <span style={{ fontSize: '11px', color: '#666' }}>{value} / {total} ({pct}%)</span>
+    <div className="mb-3">
+      <div className="flex justify-between mb-1">
+        <span className="text-[12px] text-neutral-900">{label}</span>
+        <span className="text-[11px] text-neutral-500">{value} / {total} ({pct}%)</span>
       </div>
-      <div style={{ background: '#E0E0E0', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '4px', transition: 'width 0.4s ease' }} />
+      <div className="bg-[var(--color-border)] rounded h-2 overflow-hidden">
+        <div className={`h-full ${bgClass} rounded transition-all duration-300 ease-in-out`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   )
