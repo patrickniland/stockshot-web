@@ -5,6 +5,7 @@ import { useNavSync } from '../hooks/useNavSync'
 import { useToast } from '../hooks/useToast'
 import { StockItem, CustodyLocation } from '../types'
 import CameraScanner from '../components/CameraScanner'
+import OperatorPinEntry from '../components/OperatorPinEntry'
 import ShootPicker from '../components/ShootPicker'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -88,7 +89,6 @@ export default function ScanOutView() {
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
   const currentOperator = useAppStore(s => s.currentOperator)
-  const setCurrentOperator = useAppStore(s => s.setCurrentOperator)
   const setCustody = useAppStore(s => s.setCustody)
   const restoreItemState = useAppStore(s => s.restoreItemState)
   const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
@@ -242,15 +242,8 @@ export default function ScanOutView() {
 
   const settingsFields = (
     <div className="flex flex-col gap-3">
-      {/* Operator */}
       <ControlRow label="Operator">
-        <Input
-          value={currentOperator}
-          onChange={e => setCurrentOperator(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && currentOperator.trim() && scanInputRef.current?.focus()}
-          placeholder="Your name..."
-          className={currentOperator ? 'border-[var(--color-success)]' : ''}
-        />
+        <OperatorPinEntry />
       </ControlRow>
 
       {/* Shoot */}
@@ -288,7 +281,7 @@ export default function ScanOutView() {
     <div className="flex flex-col gap-3">
       {!canScan && (
         <p className="text-[var(--text-xs)] text-[var(--color-warning)] text-center font-medium">
-          Enter operator name to begin scanning
+          Enter your operator PIN to begin scanning
         </p>
       )}
 

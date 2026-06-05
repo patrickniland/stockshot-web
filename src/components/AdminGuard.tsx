@@ -6,10 +6,11 @@ import useAppStore from '../store/useAppStore'
 import PinEntryModal from './PinEntryModal'
 
 const ADMIN_NAV = [
-  { to: '/admin/clients',  label: 'Clients' },
-  { to: '/admin/bulk',     label: 'Bulk Status Change' },
-  { to: '/admin/trash',    label: 'Trash' },
-  { to: '/admin/settings', label: 'Settings' },
+  { to: '/admin/clients',   label: 'Clients' },
+  { to: '/admin/operators', label: 'Operators' },
+  { to: '/admin/bulk',      label: 'Bulk Status Change' },
+  { to: '/admin/trash',     label: 'Trash' },
+  { to: '/admin/settings',  label: 'Settings' },
 ]
 
 function AdminBanner() {

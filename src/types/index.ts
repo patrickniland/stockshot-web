@@ -92,6 +92,15 @@ export interface StockItem {
   dispatchedTo?: string
 }
 
+// Studio operator (authenticated via PIN)
+export interface Operator {
+  id: string
+  orgId: string
+  name: string
+  isActive: boolean
+  createdAt: string
+}
+
 // A named production session
 export interface Shoot {
   id: string

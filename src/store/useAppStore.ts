@@ -3,15 +3,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
-  Client, Shoot, StockItem, Drop,
+  Client, Shoot, StockItem, Drop, Operator,
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient, deleteItem } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient, deleteItem, fetchOperators, createOperatorDB, resetOperatorPinDB, setOperatorActiveDB, verifyOperatorPinDB } from '../lib/db'
 import { supabase } from '../lib/supabase'
 
 interface AppStore {
   clients: Client[]
+  operators: Operator[]
   savedShoots: Shoot[]
   activeShootId: string | null
   orgId: string | null
@@ -105,6 +106,13 @@ interface AppStore {
   setStylingMode: (val: boolean) => void
   resetStore: () => void
 
+  // Operator actions
+  loadOperators: () => Promise<void>
+  createOperator: (name: string, pin: string) => Promise<void>
+  resetOperatorPin: (operatorId: string, newPin: string) => Promise<void>
+  setOperatorActive: (operatorId: string, isActive: boolean) => Promise<void>
+  verifyOperatorPin: (pin: string) => Promise<{ ok: boolean; name?: string }>
+
   // Admin PIN actions
   verifyPin: (pin: string) => Promise<{ ok: boolean; lockedUntil?: Date }>
   lockAdminNow: () => void
@@ -160,6 +168,7 @@ const useAppStore = create<AppStore>()(
     (set, get) => ({
       clients: [],
       savedShoots: [],
+      operators: [],
       activeShootId: null,
       orgId: null,
       deletedShootIds: [],
@@ -769,6 +778,53 @@ const useAppStore = create<AppStore>()(
       setCurrentIntakeLook: (val) => set({ currentIntakeLook: val }),
       setLastScanFeedback: (val) => set({ lastScanFeedback: val }),
       setStylingMode: (val) => set({ stylingMode: val }),
+
+      // ── Operator actions ──────────────────────────────────
+      loadOperators: async () => {
+        const { orgId } = get()
+        if (!orgId) return
+        try {
+          const ops = await fetchOperators(orgId)
+          set({ operators: ops })
+        } catch (e) {
+          console.error('[Operators] load failed:', e)
+        }
+      },
+
+      createOperator: async (name, pin) => {
+        const { orgId } = get()
+        if (!orgId) throw new Error('No org')
+        const id = await createOperatorDB(orgId, name, pin)
+        const newOp: Operator = { id, orgId, name, isActive: true, createdAt: new Date().toISOString() }
+        set(s => ({ operators: [...s.operators, newOp] }))
+      },
+
+      resetOperatorPin: async (operatorId, newPin) => {
+        await resetOperatorPinDB(operatorId, newPin)
+      },
+
+      setOperatorActive: async (operatorId, isActive) => {
+        await setOperatorActiveDB(operatorId, isActive)
+        set(s => ({
+          operators: s.operators.map(o => o.id === operatorId ? { ...o, isActive } : o),
+        }))
+      },
+
+      verifyOperatorPin: async (pin) => {
+        const { orgId } = get()
+        if (!orgId) return { ok: false }
+        try {
+          const name = await verifyOperatorPinDB(orgId, pin)
+          if (name) {
+            set({ currentOperator: name })
+            return { ok: true, name }
+          }
+          return { ok: false }
+        } catch (e) {
+          console.error('[Operators] verify failed:', e)
+          return { ok: false }
+        }
+      },
 
       // ── Admin PIN actions ─────────────────────────────────
       grantAdminSession: () => set({

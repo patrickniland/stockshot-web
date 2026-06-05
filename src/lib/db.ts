@@ -1,7 +1,7 @@
 // StockShot — Database operations
 
 import { supabase } from './supabase'
-import { Shoot, StockItem, Client, CustodyLocation, CustodyEvent } from '../types'
+import { Shoot, StockItem, Client, Operator, CustodyLocation, CustodyEvent } from '../types'
 
 // ── Shoots ────────────────────────────────────────────────────────────────────
 
@@ -200,6 +200,46 @@ export async function upsertClient(client: Client, orgId: string): Promise<void>
 export async function deleteClientFromDB(clientId: string): Promise<void> {
   const { error } = await supabase.from('clients').delete().eq('id', clientId)
   if (error) throw error
+}
+
+// ── Operators ─────────────────────────────────────────────────────────────────
+
+export async function fetchOperators(orgId: string): Promise<Operator[]> {
+  const { data, error } = await supabase
+    .from('operators')
+    .select('id, org_id, name, is_active, created_at')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map(r => ({
+    id: r.id,
+    orgId: r.org_id,
+    name: r.name,
+    isActive: r.is_active,
+    createdAt: r.created_at,
+  }))
+}
+
+export async function createOperatorDB(orgId: string, name: string, pin: string): Promise<string> {
+  const { data, error } = await supabase.rpc('create_operator', { p_org_id: orgId, p_name: name, p_pin: pin })
+  if (error) throw new Error(error.message)
+  return data as string
+}
+
+export async function resetOperatorPinDB(operatorId: string, newPin: string): Promise<void> {
+  const { error } = await supabase.rpc('reset_operator_pin', { p_operator_id: operatorId, p_new_pin: newPin })
+  if (error) throw new Error(error.message)
+}
+
+export async function setOperatorActiveDB(operatorId: string, isActive: boolean): Promise<void> {
+  const { error } = await supabase.from('operators').update({ is_active: isActive }).eq('id', operatorId)
+  if (error) throw error
+}
+
+export async function verifyOperatorPinDB(orgId: string, pin: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('verify_operator_pin', { p_org_id: orgId, p_pin: pin })
+  if (error) throw new Error(error.message)
+  return data as string | null
 }
 
 // ── Mappers ───────────────────────────────────────────────────────────────────

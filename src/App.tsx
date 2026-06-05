@@ -21,6 +21,7 @@ import AdminClientsView from './pages/admin/ClientsView'
 import TrashView from './pages/admin/TrashView'
 import BulkStatusChangeView from './pages/admin/BulkStatusChangeView'
 import AdminSettingsView from './pages/admin/AdminSettingsView'
+import OperatorsView from './pages/admin/OperatorsView'
 import { Session } from '@supabase/supabase-js'
 
 function AppWithSync({ session }: { session: Session }) {
@@ -28,6 +29,7 @@ function AppWithSync({ session }: { session: Session }) {
   const setOrgId = useAppStore(s => s.setOrgId)
   const migrateLocations = useAppStore(s => s.migrateLocations)
   const checkHasPin = useAppStore(s => s.checkHasPin)
+  const loadOperators = useAppStore(s => s.loadOperators)
   useSupabaseSync(orgId)
 
   useEffect(() => { migrateLocations() }, [])
@@ -42,6 +44,7 @@ function AppWithSync({ session }: { session: Session }) {
             : 'My Studio'
         )
         setOrgId(id)
+        loadOperators()
       } catch (e) {
         console.error('Failed to init org:', e)
       }
@@ -82,11 +85,12 @@ function AppWithSync({ session }: { session: Session }) {
           <Route path="/admin/*" element={
             <AdminGuard>
               <Routes>
-                <Route path="clients"  element={<AdminClientsView />} />
-                <Route path="bulk"     element={<BulkStatusChangeView />} />
-                <Route path="trash"    element={<TrashView />} />
-                <Route path="settings" element={<AdminSettingsView />} />
-                <Route path="*"        element={<Navigate to="/admin/clients" replace />} />
+                <Route path="clients"   element={<AdminClientsView />} />
+                <Route path="operators" element={<OperatorsView />} />
+                <Route path="bulk"      element={<BulkStatusChangeView />} />
+                <Route path="trash"     element={<TrashView />} />
+                <Route path="settings"  element={<AdminSettingsView />} />
+                <Route path="*"         element={<Navigate to="/admin/clients" replace />} />
               </Routes>
             </AdminGuard>
           } />
