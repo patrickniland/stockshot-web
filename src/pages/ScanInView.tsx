@@ -106,7 +106,6 @@ export default function ScanInView() {
   const [scanning, setScanning] = useState(false)
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
   const [flashState, setFlashState] = useState<'success' | 'error' | null>(null)
-  const [dispatchMode, setDispatchMode] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(
     () => localStorage.getItem('stockshot_scan_sound') === 'true'
   )
@@ -124,7 +123,6 @@ export default function ScanInView() {
   const stylingMode = useAppStore(s => s.stylingMode)
   const setStylingMode = useAppStore(s => s.setStylingMode)
   const commitScanIn = useAppStore(s => s.commitScanIn)
-  const setCustody = useAppStore(s => s.setCustody)
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
   const restoreItemState = useAppStore(s => s.restoreItemState)
   const removeItemFromShoot = useAppStore(s => s.removeItemFromShoot)
@@ -179,11 +177,6 @@ export default function ScanInView() {
     i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0
   )
 
-  // Items awaiting dispatch — at_client with no history (fresh imports never touched)
-  const dispatchPendingItems = shootItems.filter(i =>
-    i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length === 0
-  )
-  const dispatchedCount = shootItems.filter(i => i.custodyLocation === 'in_transit').length
 
   // ── Feedback helpers ─────────────────────────────────────────────────────────
 
@@ -231,16 +224,6 @@ export default function ScanInView() {
         try { navigator.vibrate([100, 50, 100]) } catch {}
         setPendingAction({ type: 'confirmAdd', barcode: raw })
       }
-      return
-    }
-
-    if (dispatchMode) {
-      if (foundItem.custodyLocation === 'in_transit') {
-        triggerError(`Already In Transit — ${foundItem.styleNumber || foundItem.qrCodeValue}`)
-        appendFeedback('already', foundItem)
-        return
-      }
-      doDispatchItem(foundItem, selectedShootId!)
       return
     }
 
@@ -297,37 +280,6 @@ export default function ScanInView() {
     })
 
     setActiveStatView(scanInLocation)
-    triggerSuccess()
-  }
-
-  function doDispatchItem(item: StockItem, shootId: string) {
-    const prev = {
-      custodyLocation: item.custodyLocation,
-      custodyHistory: item.custodyHistory,
-      lastScannedAt: item.lastScannedAt,
-      lastScannedBy: item.lastScannedBy,
-    }
-    const now = new Date().toISOString()
-    setCustody(item.id, 'in_transit', currentOperator, shootId)
-    setRecentScans(prev2 => [
-      {
-        key: `${item.id}-${now}`,
-        itemId: item.id,
-        identifier: item.styleNumber || item.qrCodeValue,
-        description: item.description,
-        location: 'in_transit' as CustodyLocation,
-        time: now,
-        prev,
-      },
-      ...prev2,
-    ].slice(0, 10))
-    setLastScanFeedback({
-      id: Date.now().toString(),
-      type: 'success',
-      message: 'Dispatched — In Transit',
-      scannedValue: item.styleNumber || item.qrCodeValue,
-    })
-    setActiveStatView('in_transit')
     triggerSuccess()
   }
 
@@ -451,7 +403,7 @@ export default function ScanInView() {
 
       <ControlRow label="Location">
         <div className="flex gap-1.5">
-          {(['at_studio', 'at_client'] as CustodyLocation[]).map(loc => (
+          {(['at_studio', 'at_client', 'in_transit'] as CustodyLocation[]).map(loc => (
             <button
               key={loc}
               onClick={() => setScanInLocation(loc)}
@@ -544,7 +496,7 @@ export default function ScanInView() {
         >
           {scanning
             ? <CircleNotch size={18} className="animate-spin" />
-            : dispatchMode ? '→ Dispatch' : '✓ Scan In'}
+            : '✓ Scan In'}
         </Button>
         <Button
           variant="primary" size="lg"
@@ -786,34 +738,20 @@ export default function ScanInView() {
         </div>
 
         {/* TABLET+: Controls + scan card */}
-        <Card className={`hidden md:block ${stylingMode ? 'border-amber-400' : dispatchMode ? 'border-[var(--color-info)]' : ''}`}>
-          <p className="text-[var(--text-lg)] font-semibold text-slate-900 text-center mb-4">
-            {dispatchMode ? 'Dispatch' : 'Scan In'}
-          </p>
+        <Card className={`hidden md:block ${stylingMode ? 'border-amber-400' : ''}`}>
+          <p className="text-[var(--text-lg)] font-semibold text-slate-900 text-center mb-4">Scan In</p>
           {settingsFields}
 
           <div className="flex items-center gap-2 mt-3 mb-4">
             <Button
               variant="secondary" size="sm"
               className={`flex-1 ${stylingMode ? 'border-amber-400 bg-amber-50 text-amber-700' : ''}`}
-              onClick={() => { setStylingMode(!stylingMode); setDispatchMode(false) }}
+              onClick={() => setStylingMode(!stylingMode)}
             >
               {stylingMode ? '✦ Styling Mode ON' : 'Enter Styling Mode'}
             </Button>
             {stylingMode && (
               <Button variant="primary" size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => setStylingMode(false)}>
-                EXIT
-              </Button>
-            )}
-            <Button
-              variant="secondary" size="sm"
-              className={`flex-1 ${dispatchMode ? 'border-[var(--color-info)] bg-[var(--color-info)]/10 text-[var(--color-info)]' : ''}`}
-              onClick={() => { setDispatchMode(!dispatchMode); setStylingMode(false) }}
-            >
-              {dispatchMode ? '→ Dispatch Mode ON' : 'Dispatch Mode'}
-            </Button>
-            {dispatchMode && (
-              <Button variant="primary" size="sm" className="bg-[var(--color-info)] hover:opacity-90" onClick={() => setDispatchMode(false)}>
                 EXIT
               </Button>
             )}
@@ -842,24 +780,12 @@ export default function ScanInView() {
                 <Button
                   variant="secondary" size="sm"
                   className={`flex-1 ${stylingMode ? 'border-amber-400 bg-amber-50 text-amber-700' : ''}`}
-                  onClick={() => { setStylingMode(!stylingMode); setDispatchMode(false) }}
+                  onClick={() => setStylingMode(!stylingMode)}
                 >
                   {stylingMode ? '✦ Styling Mode ON' : 'Enter Styling Mode'}
                 </Button>
                 {stylingMode && (
                   <Button variant="primary" size="sm" className="bg-amber-500" onClick={() => setStylingMode(false)}>
-                    EXIT
-                  </Button>
-                )}
-                <Button
-                  variant="secondary" size="sm"
-                  className={`flex-1 ${dispatchMode ? 'border-[var(--color-info)] bg-[var(--color-info)]/10 text-[var(--color-info)]' : ''}`}
-                  onClick={() => { setDispatchMode(!dispatchMode); setStylingMode(false) }}
-                >
-                  {dispatchMode ? '→ Dispatch Mode ON' : 'Dispatch Mode'}
-                </Button>
-                {dispatchMode && (
-                  <Button variant="primary" size="sm" className="bg-[var(--color-info)] hover:opacity-90" onClick={() => setDispatchMode(false)}>
                     EXIT
                   </Button>
                 )}
@@ -889,29 +815,17 @@ export default function ScanInView() {
       {/* ── Desktop: right reference panel ── */}
       <div className="hidden lg:flex flex-col flex-1 border-l border-[var(--color-border)] bg-white min-w-0">
         <div className="px-4 py-3 bg-slate-50 border-b border-[var(--color-border)] flex items-center gap-2 flex-shrink-0">
-          {dispatchMode ? (
-            <>
-              <span className="text-[var(--text-sm)] font-bold text-[var(--color-info)]">Pending Dispatch</span>
-              <span className="bg-[var(--color-info)] text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full">
-                {dispatchPendingItems.length}
-              </span>
-              <span className="text-[var(--text-xs)] text-slate-400 ml-1">· {dispatchedCount} dispatched</span>
-            </>
-          ) : (
-            <>
-              <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
-                {locationLabel(activeStatView)}
-              </span>
-              <span className={`${LOCATION_STYLE[activeStatView].bg} text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full`}>
-                {panelItems.length}
-              </span>
-            </>
-          )}
+          <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
+            {locationLabel(activeStatView)}
+          </span>
+          <span className={`${LOCATION_STYLE[activeStatView].bg} text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full`}>
+            {panelItems.length}
+          </span>
           <span className="flex-1" />
           <span className="text-[var(--text-xs)] text-slate-400">{selectedShoot?.name ?? 'No shoot selected'}</span>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {itemTable(dispatchMode ? dispatchPendingItems : panelItems, dispatchMode ? 'All items dispatched' : undefined)}
+          {itemTable(panelItems)}
         </div>
       </div>
 
@@ -919,28 +833,16 @@ export default function ScanInView() {
       <div className="hidden md:block lg:hidden px-4 pb-4">
         <Card padding="sm">
           <div className="flex items-center gap-2 px-2 py-1.5 mb-1">
-            {dispatchMode ? (
-              <>
-                <span className="text-[var(--text-sm)] font-bold text-[var(--color-info)]">Pending Dispatch</span>
-                <span className="bg-[var(--color-info)] text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full">
-                  {dispatchPendingItems.length}
-                </span>
-                <span className="text-[var(--text-xs)] text-slate-400 ml-1">· {dispatchedCount} dispatched</span>
-              </>
-            ) : (
-              <>
-                <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
-                  {locationLabel(activeStatView)}
-                </span>
-                <span className={`${LOCATION_STYLE[activeStatView].bg} text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full`}>
-                  {panelItems.length}
-                </span>
-              </>
-            )}
+            <span className={`text-[var(--text-sm)] font-bold ${LOCATION_STYLE[activeStatView].text}`}>
+              {locationLabel(activeStatView)}
+            </span>
+            <span className={`${LOCATION_STYLE[activeStatView].bg} text-white text-[var(--text-xs)] font-bold px-2 py-0.5 rounded-full`}>
+              {panelItems.length}
+            </span>
             <span className="flex-1" />
             <span className="text-[var(--text-xs)] text-slate-400">{selectedShoot?.name ?? ''}</span>
           </div>
-          {itemTable(dispatchMode ? dispatchPendingItems : panelItems, dispatchMode ? 'All items dispatched' : undefined)}
+          {itemTable(panelItems)}
         </Card>
       </div>
 
