@@ -117,6 +117,7 @@ export default function ScanInView() {
   const scanInLocation = useAppStore(s => s.scanInLocation)
   const setScanInLocation = useAppStore(s => s.setScanInLocation)
   const currentOperator = useAppStore(s => s.currentOperator)
+  const currentOperatorIsClient = useAppStore(s => s.currentOperatorIsClient)
   const currentIntakeLook = useAppStore(s => s.currentIntakeLook)
   const setCurrentIntakeLook = useAppStore(s => s.setCurrentIntakeLook)
   const bumpLook = useAppStore(s => s.bumpLook)
@@ -150,6 +151,13 @@ export default function ScanInView() {
     setLastScanFeedback(null)
     scanInputRef.current?.focus()
   }, [])
+
+  // When a client operator logs in, they can't scan to at_studio — fall back to at_client
+  useEffect(() => {
+    if (currentOperatorIsClient && scanInLocation === 'at_studio') {
+      setScanInLocation('at_client')
+    }
+  }, [currentOperatorIsClient])
 
   useEffect(() => {
     if (!lastScanFeedback) return
@@ -398,7 +406,7 @@ export default function ScanInView() {
 
       <ControlRow label="Location">
         <div className="flex gap-1.5">
-          {(['at_studio', 'at_client', 'in_transit'] as CustodyLocation[]).map(loc => (
+          {(['at_studio', 'at_client', 'in_transit'] as CustodyLocation[]).filter(loc => !(currentOperatorIsClient && loc === 'at_studio')).map(loc => (
             <button
               key={loc}
               onClick={() => setScanInLocation(loc)}

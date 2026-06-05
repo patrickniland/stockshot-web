@@ -207,7 +207,7 @@ export async function deleteClientFromDB(clientId: string): Promise<void> {
 export async function fetchOperators(orgId: string): Promise<Operator[]> {
   const { data, error } = await supabase
     .from('operators')
-    .select('id, org_id, name, is_active, created_at')
+    .select('id, org_id, name, is_active, is_client_operator, created_at')
     .eq('org_id', orgId)
     .order('created_at', { ascending: true })
   if (error) throw error
@@ -216,12 +216,13 @@ export async function fetchOperators(orgId: string): Promise<Operator[]> {
     orgId: r.org_id,
     name: r.name,
     isActive: r.is_active,
+    isClientOperator: r.is_client_operator ?? false,
     createdAt: r.created_at,
   }))
 }
 
-export async function createOperatorDB(orgId: string, name: string, pin: string): Promise<string> {
-  const { data, error } = await supabase.rpc('create_operator', { p_org_id: orgId, p_name: name, p_pin: pin })
+export async function createOperatorDB(orgId: string, name: string, pin: string, isClientOperator: boolean): Promise<string> {
+  const { data, error } = await supabase.rpc('create_operator', { p_org_id: orgId, p_name: name, p_pin: pin, p_is_client_operator: isClientOperator })
   if (error) throw new Error(error.message)
   return data as string
 }
@@ -236,10 +237,10 @@ export async function setOperatorActiveDB(operatorId: string, isActive: boolean)
   if (error) throw error
 }
 
-export async function verifyOperatorPinDB(orgId: string, pin: string): Promise<string | null> {
+export async function verifyOperatorPinDB(orgId: string, pin: string): Promise<{ name: string; isClient: boolean } | null> {
   const { data, error } = await supabase.rpc('verify_operator_pin', { p_org_id: orgId, p_pin: pin })
   if (error) throw new Error(error.message)
-  return data as string | null
+  return data as { name: string; isClient: boolean } | null
 }
 
 // ── Mappers ───────────────────────────────────────────────────────────────────

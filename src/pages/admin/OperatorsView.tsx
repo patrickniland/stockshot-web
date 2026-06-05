@@ -64,6 +64,7 @@ function usePinState() {
 function CreateOperatorForm({ onDone }: { onDone: () => void }) {
   const createOperator = useAppStore(s => s.createOperator)
   const [name, setName] = useState('')
+  const [isClientOperator, setIsClientOperator] = useState(false)
   const pinA = usePinState()
   const pinB = usePinState()
   const [error, setError] = useState('')
@@ -77,7 +78,7 @@ function CreateOperatorForm({ onDone }: { onDone: () => void }) {
     if (OBVIOUS_PINS.has(pinA.pin)) { setError('PIN is too obvious — choose a less predictable one'); pinA.reset(); pinB.reset(); return }
     setSaving(true)
     try {
-      await createOperator(name.trim(), pinA.pin)
+      await createOperator(name.trim(), pinA.pin, isClientOperator)
       onDone()
     } catch (e: any) {
       setError(e?.message ?? 'Failed to create operator')
@@ -99,6 +100,34 @@ function CreateOperatorForm({ onDone }: { onDone: () => void }) {
             placeholder="e.g. Sarah"
             className="w-full px-3 py-2 border border-[var(--color-border)] rounded-[var(--radius-md)] text-[14px] outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
           />
+        </div>
+
+        <div>
+          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Type</label>
+          <div className="flex gap-1.5">
+            {([false, true] as const).map(isClient => (
+              <button
+                key={String(isClient)}
+                type="button"
+                onClick={() => setIsClientOperator(isClient)}
+                className={[
+                  'px-3 py-1.5 rounded-[var(--radius-md)] text-[13px] font-semibold border transition-colors',
+                  isClientOperator === isClient
+                    ? isClient
+                      ? 'bg-[var(--color-warning)]/10 border-[var(--color-warning)] text-[var(--color-warning)]'
+                      : 'bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)]'
+                    : 'border-[var(--color-border)] text-slate-400 hover:bg-slate-50',
+                ].join(' ')}
+              >
+                {isClient ? 'Client' : 'Studio'}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1.5">
+            {isClientOperator
+              ? 'Can scan to At Client and In Transit only'
+              : 'Full access to all scan locations'}
+          </p>
         </div>
 
         <div>
@@ -228,7 +257,12 @@ export default function OperatorsView() {
                   <div className="flex items-center gap-3">
                     <UserCircle size={20} className="text-slate-400 flex-shrink-0" />
                     <div className="flex-1">
-                      <div className="text-[14px] font-semibold text-neutral-700">{op.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-semibold text-neutral-700">{op.name}</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${op.isClientOperator ? 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]' : 'bg-[var(--color-brand)]/10 text-[var(--color-brand)]'}`}>
+                          {op.isClientOperator ? 'Client' : 'Studio'}
+                        </span>
+                      </div>
                       <div className="text-[11px] text-neutral-400">Added {new Date(op.createdAt).toLocaleDateString('en-ZA')}</div>
                     </div>
                     <Button

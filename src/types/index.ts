@@ -98,6 +98,7 @@ export interface Operator {
   orgId: string
   name: string
   isActive: boolean
+  isClientOperator: boolean
   createdAt: string
 }
 

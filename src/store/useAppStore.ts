@@ -26,6 +26,7 @@ interface AppStore {
   scanInLocation: CustodyLocation
   scanOutLocation: CustodyLocation
   currentOperator: string
+  currentOperatorIsClient: boolean
   shotListLocationFilter: CustodyLocation | 'all'
   stylingMode: boolean
 
@@ -108,7 +109,7 @@ interface AppStore {
 
   // Operator actions
   loadOperators: () => Promise<void>
-  createOperator: (name: string, pin: string) => Promise<void>
+  createOperator: (name: string, pin: string, isClientOperator: boolean) => Promise<void>
   resetOperatorPin: (operatorId: string, newPin: string) => Promise<void>
   setOperatorActive: (operatorId: string, isActive: boolean) => Promise<void>
   verifyOperatorPin: (pin: string) => Promise<{ ok: boolean; name?: string }>
@@ -179,6 +180,7 @@ const useAppStore = create<AppStore>()(
       scanInLocation: 'at_studio',
       scanOutLocation: 'in_transit',
       currentOperator: '',
+      currentOperatorIsClient: false,
       shotListLocationFilter: 'all',
       stylingMode: false,
       adminSessionExpiresAt: null,
@@ -791,11 +793,11 @@ const useAppStore = create<AppStore>()(
         }
       },
 
-      createOperator: async (name, pin) => {
+      createOperator: async (name, pin, isClientOperator) => {
         const { orgId } = get()
         if (!orgId) throw new Error('No org')
-        const id = await createOperatorDB(orgId, name, pin)
-        const newOp: Operator = { id, orgId, name, isActive: true, createdAt: new Date().toISOString() }
+        const id = await createOperatorDB(orgId, name, pin, isClientOperator)
+        const newOp: Operator = { id, orgId, name, isActive: true, isClientOperator, createdAt: new Date().toISOString() }
         set(s => ({ operators: [...s.operators, newOp] }))
       },
 
@@ -814,10 +816,10 @@ const useAppStore = create<AppStore>()(
         const { orgId } = get()
         if (!orgId) return { ok: false }
         try {
-          const name = await verifyOperatorPinDB(orgId, pin)
-          if (name) {
-            set({ currentOperator: name })
-            return { ok: true, name }
+          const result = await verifyOperatorPinDB(orgId, pin)
+          if (result) {
+            set({ currentOperator: result.name, currentOperatorIsClient: result.isClient })
+            return { ok: true, name: result.name }
           }
           return { ok: false }
         } catch (e) {
@@ -889,7 +891,7 @@ const useAppStore = create<AppStore>()(
       },
       setScanInLocation: (val) => set({ scanInLocation: val }),
       setScanOutLocation: (val) => set({ scanOutLocation: val }),
-      setCurrentOperator: (val) => set({ currentOperator: val }),
+      setCurrentOperator: (val) => set({ currentOperator: val, currentOperatorIsClient: false }),
       setShotListLocationFilter: (val) => set({ shotListLocationFilter: val }),
 
       markDirty: (itemId) => set(s => ({
