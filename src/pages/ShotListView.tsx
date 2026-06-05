@@ -221,6 +221,8 @@ export default function ShotListView() {
       {/* Toolbar */}
       <div className="px-4 py-2.5 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center gap-2 flex-wrap">
         <span className="text-lg font-bold text-slate-900">Shot List</span>
+        <span className="text-sm text-slate-400">—</span>
+        <span className="text-sm font-semibold text-slate-700 truncate max-w-[260px]">{shoot?.name}</span>
         <span className="text-sm text-slate-500">({filtered.length} items)</span>
         <div className="flex-1" />
 

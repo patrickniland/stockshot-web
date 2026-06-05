@@ -159,6 +159,8 @@ export default function StockListView() {
       {/* Toolbar */}
       <div className="px-4 py-2.5 bg-[var(--color-surface-muted)] border-b border-[var(--color-border)] flex items-center gap-2 flex-wrap">
         <span className="text-lg font-bold text-slate-900">Stock List</span>
+        <span className="text-sm text-slate-400">—</span>
+        <span className="text-sm font-semibold text-slate-700 truncate max-w-[260px]">{activeShoot.name}</span>
         {activeShoot.isUnassigned && (
           <span className="text-xs bg-[var(--color-warning)]/10 text-[var(--color-warning)] px-1.5 py-0.5 rounded font-semibold">Unassigned</span>
         )}
@@ -276,8 +278,8 @@ export default function StockListView() {
           className="flex-shrink-0"
         />
         <span className="w-7 text-center">#</span>
-        <span className="flex-1">Style / SKU</span>
-        <span className="w-28">Description</span>
+        <span className="w-32 flex-shrink-0">Style / SKU</span>
+        <span className="flex-1">Description</span>
         <span className="w-14">Looks</span>
         <span className="w-24">Type</span>
         <span className="w-28">Custody</span>
@@ -307,13 +309,13 @@ export default function StockListView() {
 
                 <span className="w-7 text-center text-xs text-slate-400 flex-shrink-0">{i + 1}</span>
 
-                <div className="flex-1 min-w-0" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                <div className="w-32 flex-shrink-0 min-w-0" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                   <div className="text-sm font-medium text-slate-900 overflow-hidden text-ellipsis whitespace-nowrap">{item.styleNumber}</div>
                   <div className="text-xs text-slate-400 font-mono overflow-hidden text-ellipsis whitespace-nowrap">{item.sku}</div>
                 </div>
 
                 <div
-                  className="w-28 text-xs text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap"
+                  className="flex-1 min-w-0 text-xs text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap"
                   onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
                 >
                   {item.description || '—'}
