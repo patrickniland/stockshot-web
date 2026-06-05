@@ -1,6 +1,7 @@
 // StockShot — PDF Exporter
 // Supports stock list, shot list, and label grid (4 or 8 per row) with QR codes
 
+import { jsPDF } from 'jspdf'
 import { StockItem } from '../types'
 import { generateQRDataURL } from './qrGenerator'
 
@@ -106,7 +107,6 @@ function addPageHeaders(doc: any, shootName: string, pageW: number, margin: numb
 // ── Missing items PDF ─────────────────────────────────────────────────────────
 
 export async function exportMissingItemsPDF(items: StockItem[]): Promise<void> {
-  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
 
   doc.setFontSize(16)
@@ -144,7 +144,6 @@ export async function exportStockListPDF(
   items: StockItem[],
   shootName = '',
 ): Promise<void> {
-  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
 
   const PAGE_W  = 210
@@ -302,7 +301,6 @@ export async function exportShotListPDF(
   includeLocation = false,
   shootName = '',
 ): Promise<void> {
-  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
 
   const PAGE_W      = 210
@@ -462,7 +460,6 @@ export async function exportLabelGridPDF(
   options: LabelOptions,
   shootName = '',
 ): Promise<void> {
-  const { jsPDF } = await import('jspdf')
 
   const isNarrow   = options.perRow === 8
   const doc        = new jsPDF({ orientation: isNarrow ? 'landscape' : 'portrait' })
