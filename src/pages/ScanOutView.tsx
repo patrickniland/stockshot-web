@@ -89,6 +89,7 @@ export default function ScanOutView() {
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
   const currentOperator = useAppStore(s => s.currentOperator)
+  const currentOperatorIsClient = useAppStore(s => s.currentOperatorIsClient)
   const setCustody = useAppStore(s => s.setCustody)
   const restoreItemState = useAppStore(s => s.restoreItemState)
   const setLastScanFeedback = useAppStore(s => s.setLastScanFeedback)
@@ -101,6 +102,13 @@ export default function ScanOutView() {
     setLastScanFeedback(null)
     scanInputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (currentOperatorIsClient) {
+      const allowed = OUT_TO_OPTIONS.filter(o => o.location !== 'at_studio')
+      if (!allowed.some(o => o.key === outToKey)) setOutToKey(allowed[0].key)
+    }
+  }, [currentOperatorIsClient])
 
   const canScan = !!currentOperator.trim()
   const selectedOption = OUT_TO_OPTIONS.find(o => o.key === outToKey) ?? OUT_TO_OPTIONS[0]
@@ -254,7 +262,7 @@ export default function ScanOutView() {
       {/* Out To */}
       <ControlRow label="Out To">
         <div className="flex flex-wrap gap-1.5">
-          {OUT_TO_OPTIONS.map(opt => {
+          {OUT_TO_OPTIONS.filter(o => !(currentOperatorIsClient && o.location === 'at_studio')).map(opt => {
             const style = LOCATION_STYLE[opt.location]
             const isActive = outToKey === opt.key
             return (
