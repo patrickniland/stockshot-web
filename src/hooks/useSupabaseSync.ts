@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   fetchShoots,
   fetchItemsForShoot,
+  fetchLookNotesForShoot,
   fetchClients,
   fetchItemsSince,
   fetchShootsSince,
@@ -110,6 +111,7 @@ export async function pullSince(since: string | null): Promise<void> {
       newShootMetas.map(async meta => ({
         ...meta,
         items: await fetchItemsForShoot(meta.id),
+        lookNotes: await fetchLookNotesForShoot(meta.id),
       }))
     )
     if (pullId !== activePullId) return
@@ -151,6 +153,7 @@ export async function pullAll(): Promise<void> {
       shootMetas.map(async meta => ({
         ...meta,
         items: await fetchItemsForShoot(meta.id),
+        lookNotes: await fetchLookNotesForShoot(meta.id),
       }))
     )
 

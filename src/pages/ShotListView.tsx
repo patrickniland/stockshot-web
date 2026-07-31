@@ -264,10 +264,10 @@ export default function ShotListView() {
         ) : groupBy === 'look' ? (
           <>
             <DndContext
-              sensors={syncStatus === 'syncing' ? [] : sensors}
+              sensors={sensors}
               collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
+              onDragStart={syncStatus !== 'syncing' ? handleDragStart : undefined}
+              onDragEnd={syncStatus !== 'syncing' ? handleDragEnd : undefined}
             >
               <SortableContext
                 items={lookGroups.map(g => g.look!)}
@@ -279,6 +279,7 @@ export default function ShotListView() {
                     lookId={group.look!}
                     groupName={group.name}
                     itemCount={group.items.length}
+                    notes={shoot?.lookNotes?.[group.look!]?.notes}
                     gi={gi}
                     totalLookGroups={lookGroups.length}
                     isDraggingAny={dragActiveId !== null}
@@ -360,7 +361,7 @@ export default function ShotListView() {
                 disabled={exporting}
                 onClick={async () => {
                   setExporting(true)
-                  try { await exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy, listPdfIncludeLocation, shoot?.name) }
+                  try { await exportShotListPDF(filtered, groupBy === 'none' ? 'look' : groupBy, listPdfIncludeLocation, shoot?.name, shoot?.lookNotes) }
                   finally { setExporting(false); setShowListPdfModal(false) }
                 }}
               >
@@ -451,12 +452,13 @@ export default function ShotListView() {
 // ── SortableLookGroup ─────────────────────────────────────────────────────────
 
 function SortableLookGroup({
-  lookId, groupName, itemCount, gi, totalLookGroups, isDraggingAny,
+  lookId, groupName, itemCount, notes, gi, totalLookGroups, isDraggingAny,
   onMoveUp, onMoveDown, children,
 }: {
   lookId: number
   groupName: string
   itemCount: number
+  notes?: string
   gi: number
   totalLookGroups: number
   isDraggingAny: boolean
@@ -492,8 +494,13 @@ function SortableLookGroup({
           <DotsSixVertical size={18} />
         </button>
 
-        <span className="flex-1 py-2">
-          {groupName} — {itemCount} item{itemCount !== 1 ? 's' : ''}
+        <span className="flex-1 py-2 min-w-0 flex items-center gap-1.5 overflow-hidden">
+          <span className="flex-shrink-0">{groupName} — {itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+          {notes && notes.trim() && (
+            <span className="font-normal text-slate-600 text-sm truncate" title={notes}>
+              · {notes}
+            </span>
+          )}
         </span>
 
         {/* Up/Down arrows */}

@@ -2,7 +2,7 @@
 // Supports stock list, shot list, and label grid (4 or 8 per row) with QR codes
 
 import { jsPDF } from 'jspdf'
-import { StockItem } from '../types'
+import { StockItem, LookNote } from '../types'
 import { generateQRDataURL } from './qrGenerator'
 
 // ── Design system ─────────────────────────────────────────────────────────────
@@ -300,6 +300,7 @@ export async function exportShotListPDF(
   groupBy: 'look' | 'productType' = 'look',
   includeLocation = false,
   shootName = '',
+  lookNotes?: Record<number, LookNote>,
 ): Promise<void> {
   const doc = new jsPDF()
 
@@ -354,11 +355,33 @@ export async function exportShotListPDF(
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.setTextColor(PDF_COLORS.accent)
-    doc.text(
-      `${groupName}  (${groupItems.length} item${groupItems.length !== 1 ? 's' : ''})`,
-      MARGIN + 3,
-      y + GROUP_HDR_H * 0.70,
-    )
+
+    const baseHdrText = `${groupName}  (${groupItems.length} item${groupItems.length !== 1 ? 's' : ''})`
+    const hdrY = y + GROUP_HDR_H * 0.70
+    const hdrX = MARGIN + 3
+    const lookMatch = groupBy === 'look' ? groupName.match(/^Look (\d+)$/) : null
+    const lookNote = lookMatch && lookNotes
+      ? lookNotes[parseInt(lookMatch[1], 10)]?.notes?.trim()
+      : undefined
+
+    if (lookNote) {
+      doc.text(baseHdrText, hdrX, hdrY)
+      const baseW = doc.getTextWidth(baseHdrText)
+      const sep = '  ·  '
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(PDF_COLORS.textMuted)
+      const sepW = doc.getTextWidth(sep)
+      const availForNote = (PAGE_W - MARGIN * 2 - 6) - baseW - sepW
+      if (availForNote > 5) {
+        const noteDisplay = firstLineOf(doc, lookNote, availForNote)
+        doc.text(sep + noteDisplay, hdrX + baseW, hdrY)
+      }
+      doc.setTextColor(PDF_COLORS.textBody)
+    } else {
+      doc.text(baseHdrText, hdrX, hdrY)
+    }
+
     y += GROUP_HDR_H
 
     // ── Column headers ─────────────────────────────────────────────────────

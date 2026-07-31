@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   CaretLeft, CaretRight, Camera, X, ArrowCounterClockwise, Gear, Package,
-  CircleNotch, ScanSmiley, SpeakerHigh, SpeakerSimpleSlash,
+  CircleNotch, ScanSmiley, SpeakerHigh, SpeakerSimpleSlash, CheckCircle,
 } from '@phosphor-icons/react'
 import useAppStore from '../store/useAppStore'
 import { useNavSync } from '../hooks/useNavSync'
@@ -110,6 +110,9 @@ export default function ScanInView() {
   const [soundEnabled, setSoundEnabled] = useState(
     () => localStorage.getItem('stockshot_scan_sound') === 'true'
   )
+  const [noteText, setNoteText] = useState('')
+  const [noteSaved, setNoteSaved] = useState(false)
+  const noteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
@@ -123,6 +126,7 @@ export default function ScanInView() {
   const bumpLook = useAppStore(s => s.bumpLook)
   const stylingMode = useAppStore(s => s.stylingMode)
   const setStylingMode = useAppStore(s => s.setStylingMode)
+  const updateLookNote = useAppStore(s => s.updateLookNote)
   const commitScanIn = useAppStore(s => s.commitScanIn)
   const addItemToShoot = useAppStore(s => s.addItemToShoot)
   const restoreItemState = useAppStore(s => s.restoreItemState)
@@ -159,6 +163,13 @@ export default function ScanInView() {
     }
   }, [currentOperatorIsClient])
 
+  // Sync note text when the active look or shoot changes
+  useEffect(() => {
+    if (noteDebounceRef.current) clearTimeout(noteDebounceRef.current)
+    setNoteText(selectedShoot?.lookNotes?.[currentIntakeLook]?.notes ?? '')
+    setNoteSaved(false)
+  }, [currentIntakeLook, selectedShootId])
+
   useEffect(() => {
     if (!lastScanFeedback) return
     const t = setTimeout(() => setLastScanFeedback(null), 350)
@@ -185,6 +196,26 @@ export default function ScanInView() {
     i.custodyLocation === 'at_client' && (i.custodyHistory ?? []).length > 0
   )
 
+
+  // ── Look note handlers ───────────────────────────────────────────────────────
+
+  async function saveNote(text: string) {
+    if (currentIntakeLook === 0) return
+    try {
+      await updateLookNote(currentIntakeLook, text)
+      setNoteSaved(true)
+      setTimeout(() => setNoteSaved(false), 2000)
+    } catch {
+      addToast('error', 'Failed to save note')
+    }
+  }
+
+  function handleNoteChange(text: string) {
+    setNoteText(text)
+    setNoteSaved(false)
+    if (noteDebounceRef.current) clearTimeout(noteDebounceRef.current)
+    noteDebounceRef.current = setTimeout(() => saveNote(text), 500)
+  }
 
   // ── Feedback helpers ─────────────────────────────────────────────────────────
 
@@ -744,6 +775,30 @@ export default function ScanInView() {
         <Card className={`hidden md:block ${stylingMode ? 'border-amber-400' : ''}`}>
           <p className="text-[var(--text-lg)] font-semibold text-slate-900 text-center mb-4">Scan In</p>
           {settingsFields}
+
+          {/* Look note — tablet/desktop only */}
+          {currentIntakeLook > 0 && (
+            <ControlRow label="Note">
+              <div className="relative">
+                <Input
+                  value={noteText}
+                  onChange={e => handleNoteChange(e.target.value)}
+                  onBlur={() => {
+                    if (noteDebounceRef.current) clearTimeout(noteDebounceRef.current)
+                    saveNote(noteText)
+                  }}
+                  placeholder="Note for this look (optional)"
+                />
+                {noteSaved && (
+                  <CheckCircle
+                    size={14}
+                    weight="fill"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-success)] pointer-events-none"
+                  />
+                )}
+              </div>
+            </ControlRow>
+          )}
 
           <div className="flex items-center gap-2 mt-3 mb-4">
             <Button

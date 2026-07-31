@@ -102,6 +102,16 @@ export interface Operator {
   createdAt: string
 }
 
+// Per-look notes stored in the look_notes table
+export interface LookNote {
+  id: string
+  shoot_id: string
+  look_number: number
+  notes: string
+  updated_at: string
+  updated_by: string | null
+}
+
 // A named production session
 export interface Shoot {
   id: string
@@ -112,6 +122,7 @@ export interface Shoot {
   items: StockItem[]
   drops: Drop[]
   lookOrder: number[]
+  lookNotes?: Record<number, LookNote>
   deletedAt: string | null
   isUnassigned: boolean
 }

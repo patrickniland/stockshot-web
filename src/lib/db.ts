@@ -1,7 +1,7 @@
 // StockShot — Database operations
 
 import { supabase } from './supabase'
-import { Shoot, StockItem, Client, Operator, CustodyLocation, CustodyEvent } from '../types'
+import { Shoot, StockItem, Client, Operator, CustodyLocation, CustodyEvent, LookNote } from '../types'
 
 // ── Shoots ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,7 @@ export async function fetchShoots(orgId: string): Promise<Omit<Shoot, 'items'>[]
     updatedAt: row.updated_at,
     drops: row.drops ?? [],
     lookOrder: row.look_order ?? [],
+    lookNotes: {},
     deletedAt: row.deleted_at ?? null,
     isUnassigned: row.is_unassigned ?? false,
     items: [],
@@ -46,6 +47,7 @@ export async function fetchShootWithItems(shootId: string): Promise<Shoot | null
     updatedAt: row.updated_at,
     drops: row.drops ?? [],
     lookOrder: row.look_order ?? [],
+    lookNotes: {},
     deletedAt: row.deleted_at ?? null,
     isUnassigned: row.is_unassigned ?? false,
     items,
@@ -243,6 +245,61 @@ export async function verifyOperatorPinDB(orgId: string, pin: string): Promise<{
   return data as { name: string; isClient: boolean } | null
 }
 
+// ── Look Notes ────────────────────────────────────────────────────────────────
+
+export async function fetchLookNotesForShoot(shootId: string): Promise<Record<number, LookNote>> {
+  const { data, error } = await supabase
+    .from('look_notes')
+    .select('*')
+    .eq('shoot_id', shootId)
+
+  if (error) throw error
+  const result: Record<number, LookNote> = {}
+  for (const row of data ?? []) {
+    result[row.look_number] = {
+      id: row.id,
+      shoot_id: row.shoot_id,
+      look_number: row.look_number,
+      notes: row.notes,
+      updated_at: row.updated_at,
+      updated_by: row.updated_by ?? null,
+    }
+  }
+  return result
+}
+
+export async function upsertLookNote(
+  shootId: string,
+  lookNumber: number,
+  notes: string,
+  updatedById: string | null,
+): Promise<LookNote> {
+  const { data, error } = await supabase
+    .from('look_notes')
+    .upsert(
+      {
+        shoot_id: shootId,
+        look_number: lookNumber,
+        notes,
+        updated_at: new Date().toISOString(),
+        updated_by: updatedById,
+      },
+      { onConflict: 'shoot_id,look_number' },
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+  return {
+    id: data.id,
+    shoot_id: data.shoot_id,
+    look_number: data.look_number,
+    notes: data.notes,
+    updated_at: data.updated_at,
+    updated_by: data.updated_by ?? null,
+  }
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 
 export async function fetchShootsSince(
@@ -264,6 +321,7 @@ export async function fetchShootsSince(
     updatedAt: row.updated_at,
     drops: row.drops ?? [],
     lookOrder: row.look_order ?? [],
+    lookNotes: {},
     deletedAt: row.deleted_at ?? null,
     isUnassigned: row.is_unassigned ?? false,
     items: [],

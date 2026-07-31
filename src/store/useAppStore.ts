@@ -3,11 +3,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
-  Client, Shoot, StockItem, Drop, Operator,
+  Client, Shoot, StockItem, Drop, Operator, LookNote,
   ScanFeedback, FeedbackType,
   ShotStatus, CustodyLocation, CustodyEvent,
 } from '../types'
-import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient, deleteItem, fetchOperators, createOperatorDB, resetOperatorPinDB, setOperatorActiveDB, verifyOperatorPinDB } from '../lib/db'
+import { updateItemStatus, updateItemCustody, upsertItem, upsertItems, upsertShootMeta, upsertClient, deleteItem, fetchOperators, createOperatorDB, resetOperatorPinDB, setOperatorActiveDB, verifyOperatorPinDB, upsertLookNote } from '../lib/db'
 import { supabase } from '../lib/supabase'
 
 interface AppStore {
@@ -122,6 +122,10 @@ interface AppStore {
   resetPinViaPassword: (currentPassword: string, newPin: string) => Promise<void>
   checkHasPin: () => Promise<void>
   grantAdminSession: () => void
+
+  // Look note actions
+  getLookNote: (lookNumber: number) => string
+  updateLookNote: (lookNumber: number, notes: string) => Promise<void>
 
   // Sync actions
   markDirty: (itemId: string) => void
@@ -393,7 +397,18 @@ const useAppStore = create<AppStore>()(
           looks: item.looks.map(swap).sort((a, b) => a - b),
         }))
         const lookOrder = baseOrder.map(swap).sort((a, b) => a - b)
-        const updatedShoot = { ...sh, items, lookOrder, updatedAt: new Date().toISOString() }
+
+        // Mirror the same swap on look notes so they follow their look's content
+        const prevNotes = sh.lookNotes ?? {}
+        const noteA = prevNotes[lookA]
+        const noteB = prevNotes[lookB]
+        const newLookNotes = { ...prevNotes }
+        if (noteA) { newLookNotes[lookB] = { ...noteA, look_number: lookB } }
+        else { delete newLookNotes[lookB] }
+        if (noteB) { newLookNotes[lookA] = { ...noteB, look_number: lookA } }
+        else { delete newLookNotes[lookA] }
+
+        const updatedShoot = { ...sh, items, lookOrder, lookNotes: newLookNotes, updatedAt: new Date().toISOString() }
         set({
           savedShoots: savedShoots.map(x => x.id === activeShootId ? updatedShoot : x),
         })
@@ -410,6 +425,16 @@ const useAppStore = create<AppStore>()(
             upsertItems(changedItems, activeShootId, orgId)
               .then(() => get().clearDirty(changedItemIds))
               .catch(() => {/* stays dirty, retried on next nav */})
+          }
+          // Swap notes in DB atomically via RPC (only needed if either look has a note row)
+          if (noteA || noteB) {
+            supabase.rpc('swap_look_notes', {
+              p_shoot_id: activeShootId,
+              p_look_a: lookA,
+              p_look_b: lookB,
+            }).then(({ error }) => {
+              if (error) console.error('[Sync] reorderLook notes error:', error)
+            })
           }
         }
       },
@@ -894,6 +919,52 @@ const useAppStore = create<AppStore>()(
       setCurrentOperator: (val) => set({ currentOperator: val, currentOperatorIsClient: false }),
       setShotListLocationFilter: (val) => set({ shotListLocationFilter: val }),
 
+      // ── Look note actions ─────────────────────────────────────────────────
+      getLookNote: (lookNumber) => {
+        const shoot = get().getActiveShoot()
+        return shoot?.lookNotes?.[lookNumber]?.notes ?? ''
+      },
+
+      updateLookNote: async (lookNumber, notes) => {
+        const { savedShoots, activeShootId, orgId } = get()
+        if (!activeShootId) return
+        const prevShoot = savedShoots.find(sh => sh.id === activeShootId)
+        if (!prevShoot) return
+
+        const operatorId = get().operators.find(o => o.name === get().currentOperator)?.id ?? null
+        const now = new Date().toISOString()
+        const optimisticNote: LookNote = {
+          id: prevShoot.lookNotes?.[lookNumber]?.id ?? '',
+          shoot_id: activeShootId,
+          look_number: lookNumber,
+          notes,
+          updated_at: now,
+          updated_by: operatorId,
+        }
+        const updatedShoot = {
+          ...prevShoot,
+          lookNotes: { ...prevShoot.lookNotes, [lookNumber]: optimisticNote },
+        }
+        set({ savedShoots: savedShoots.map(sh => sh.id === activeShootId ? updatedShoot : sh) })
+
+        if (orgId) {
+          try {
+            const savedNote = await upsertLookNote(activeShootId, lookNumber, notes, operatorId)
+            set(s => ({
+              savedShoots: s.savedShoots.map(sh => {
+                if (sh.id !== activeShootId) return sh
+                return { ...sh, lookNotes: { ...sh.lookNotes, [lookNumber]: savedNote } }
+              }),
+            }))
+          } catch (e) {
+            set(s => ({
+              savedShoots: s.savedShoots.map(sh => sh.id === activeShootId ? prevShoot : sh),
+            }))
+            throw e
+          }
+        }
+      },
+
       markDirty: (itemId) => set(s => ({
         dirtyItemIds: s.dirtyItemIds.includes(itemId)
           ? s.dirtyItemIds
@@ -947,7 +1018,8 @@ const useAppStore = create<AppStore>()(
         const updatedShoots = s.savedShoots.map(shoot => {
           const found = updates.find(u => u.id === shoot.id)
           if (!found) return shoot
-          return { ...found, items: shoot.items } // update metadata, preserve local items
+          // update metadata, preserve local items and lookNotes (written directly to DB on change)
+          return { ...found, items: shoot.items, lookNotes: shoot.lookNotes ?? {} }
         })
         return {
           savedShoots: [...updatedShoots, ...newShootsWithItems.filter(sh => !existingIds.has(sh.id))],
