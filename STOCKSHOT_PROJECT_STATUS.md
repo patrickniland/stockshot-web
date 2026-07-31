@@ -139,6 +139,15 @@ Per v3 brief: Stock List + Description, Shot List minus Location + wider Descrip
 - Admin → `OperatorsView` for managing operators
 - Implies tables in Supabase for operators + their PIN + role
 
+### Look Notes feature (July 2026 — `6920a71`)
+- Per-look plain-text notes written on Scan In (desktop/iPad only, not phone)
+- Displayed inline in Shot List view header and in Shot List PDF export
+- New `look_notes` Supabase table with `UNIQUE (shoot_id, look_number)` constraint and org-scoped RLS policy
+- Postgres RPC `swap_look_notes` handles atomic reorder: when drag-reorder swaps look numbers on items, notes swap with them in the same transaction
+- Fixes a subtle correctness bug — any feature keying data on `look_number` would silently attach data to wrong content after drag-reorder; RPC prevents this
+- Also fixed: `supabase.rpc().catch()` TypeError (PostgrestFilterBuilder is PromiseLike, not a full Promise — must use `.then()`)
+- Also fixed: dnd-kit "changed size between renders" warning — sync gate moved from sensors array length to `onDragStart`/`onDragEnd` handlers
+
 ### Bug fixes
 - Stock List "Reset to pending" clears looks (`edb04cc`) and persists to DB (`16e04c2`)
 
@@ -247,6 +256,22 @@ Utility classes: `.touch-target` (min 44×44), `.pb-safe` (iPhone home indicator
 - Window-focus auto-refresh not yet implemented (would complete the picture)
 - Bigger picture: Supabase realtime subscription audit might eliminate manual sync need entirely
 
+### Look-number is a position, not an identity
+- Looks are integers (`shoots.look_order: number[]`, `stock_items.looks: number[]`) — there is no stable Look UUID
+- Any feature that keys data on `look_number` (currently: `look_notes`) **must** be updated when drag-reorder changes look numbers
+- Currently handled via `swap_look_notes` RPC. If another feature references Looks by number (shot templates, per-look counters, etc.), it needs the same RPC treatment
+- If this pattern multiplies, the right long-term fix is migrating to stable UUID-based Look identity — see "Ideas" section
+
+### RLS is on by default for new Supabase tables
+- Any new table you create will reject all reads/writes until a policy is added
+- For shoot-scoped tables the pattern is: `WHERE shoot_id IN (SELECT id FROM shoots WHERE org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid()))`
+- Both `USING` (read) and `WITH CHECK` (write) clauses need this
+
+### UX: scan input focus stealing on Scan In
+- Scanner mode's auto-refocus behavior can block clicks into other fields on the same page (e.g. the Look notes input)
+- Users learn to click somewhere neutral first to release scanner focus, then click the target field
+- Not a bug — expected tradeoff of scanner-mode UX — but worth including in operator onboarding
+
 ### Historic: Phase 3 regression — "Item found in a different shoot" false positives
 - Briefly appeared after original Scan In rebuild
 - Suspected stale local state vs Supabase realtime
@@ -340,6 +365,11 @@ Lower priority:
 - Code splitting strategy (only if bundle analysis shows it matters)
 - Phone responsive for more pages (if usage patterns evolve)
 
+### Discussed but not decided
+- **UUID-based Look identity** — refactor to give each Look a stable UUID instead of relying on position-based numbers. Would eliminate the drag-reorder-plus-related-table-update pattern permanently. ~1 day of work; only worth doing if look-number-keyed features multiply.
+- **Notes in Look Builder modal** — currently notes are only editable via Scan In. If operators want to edit notes without going to Scan In, Look Builder modal is the right place. Small addition.
+- **Notes on Stock List / Labels PDF** — deliberately excluded from MVP. Add if operators ask for it.
+
 ---
 
 ## For starting a new Claude Code session
@@ -395,4 +425,4 @@ Send the output to Claude and ask for a refreshed doc. Aim for monthly or after 
 
 ---
 
-*This snapshot was verified against the codebase at commit `d41d4a0` on June 15, 2026. Update timestamp and version when refreshing.*
+*This snapshot was verified against the codebase at commit `6920a71` on July 31, 2026. Update timestamp and version when refreshing.*
