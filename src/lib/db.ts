@@ -364,6 +364,7 @@ function mapItemToDB(item: StockItem, shootId: string, orgId: string) {
     looks: item.looks,
     shot_at: item.shotAt,
     notes: item.notes,
+    manually_added: item.manuallyAdded ?? false,
     updated_at: new Date().toISOString(),
   }
 }
@@ -396,5 +397,6 @@ function mapItemFromDB(row: any): StockItem {
     notes: row.notes ?? '',
     dropId: row.drop_id ?? null,
     updatedAt: row.updated_at ?? null,
+    manuallyAdded: row.manually_added ?? false,
   }
 }

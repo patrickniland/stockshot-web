@@ -27,7 +27,7 @@ type RecentScan = {
 }
 
 type PendingAction =
-  | { type: 'confirmAdd'; barcode: string }
+  | { type: 'addItem'; barcode: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -113,6 +113,10 @@ export default function ScanInView() {
   const [noteText, setNoteText] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const noteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [modalBarcode, setModalBarcode] = useState('')
+  const [modalStyleNumber, setModalStyleNumber] = useState('')
+  const [modalDescription, setModalDescription] = useState('')
+  const modalStyleRef = useRef<HTMLInputElement>(null)
 
   const savedShoots = useAppStore(s => s.savedShoots)
   const activeShootId = useAppStore(s => s.activeShootId)
@@ -162,6 +166,13 @@ export default function ScanInView() {
       setScanInLocation('at_client')
     }
   }, [currentOperatorIsClient])
+
+  // Focus style number field when add-item modal opens
+  useEffect(() => {
+    if (pendingAction?.type === 'addItem') {
+      setTimeout(() => modalStyleRef.current?.focus(), 50)
+    }
+  }, [pendingAction])
 
   // Sync note text when the active look or shoot changes
   useEffect(() => {
@@ -261,7 +272,10 @@ export default function ScanInView() {
         setFlashState('error')
         setTimeout(() => setFlashState(null), 350)
         try { navigator.vibrate([100, 50, 100]) } catch {}
-        setPendingAction({ type: 'confirmAdd', barcode: raw })
+        setModalBarcode(raw)
+        setModalStyleNumber('')
+        setModalDescription('')
+        setPendingAction({ type: 'addItem', barcode: raw })
       }
       return
     }
@@ -332,9 +346,10 @@ export default function ScanInView() {
     })
   }
 
-  function doAddNewItem(barcode: string) {
+  function doAddNewItem(barcode: string, styleNumber?: string, description?: string, manuallyAdded = false) {
     if (!selectedShootId) return
     const now = new Date().toISOString()
+    const effectiveStyle = styleNumber?.trim() || barcode
     const event: CustodyEvent = {
       location: scanInLocation,
       timestamp: now,
@@ -343,10 +358,10 @@ export default function ScanInView() {
     }
     const newItem: StockItem = {
       id: crypto.randomUUID(),
-      styleNumber: barcode,
+      styleNumber: effectiveStyle,
       sku: barcode,
       qrCodeValue: barcode,
-      description: '',
+      description: description ?? '',
       extraFields: {},
       custodyLocation: scanInLocation,
       custodyHistory: [event],
@@ -360,14 +375,15 @@ export default function ScanInView() {
       looks: currentIntakeLook > 0 ? [currentIntakeLook] : [],
       notes: '',
       dropId: null,
+      manuallyAdded,
     }
     addItemToShoot(newItem, selectedShootId)
     setRecentScans(prev => [
       {
         key: `${newItem.id}-${now}`,
         itemId: newItem.id,
-        identifier: barcode,
-        description: '',
+        identifier: effectiveStyle,
+        description: description ?? '',
         location: scanInLocation,
         time: now,
         prev: { custodyLocation: 'at_client', custodyHistory: [], lastScannedAt: null, lastScannedBy: null },
@@ -378,10 +394,35 @@ export default function ScanInView() {
       id: Date.now().toString(),
       type: 'success',
       message: 'Added as new item',
-      scannedValue: barcode,
+      scannedValue: effectiveStyle,
     })
     setActiveStatView(scanInLocation)
     triggerSuccess()
+  }
+
+  function openAddItemModal(barcode = '') {
+    setModalBarcode(barcode)
+    setModalStyleNumber('')
+    setModalDescription('')
+    setPendingAction({ type: 'addItem', barcode })
+  }
+
+  function handleModalSubmit() {
+    const styleNum = modalStyleNumber.trim()
+    if (!styleNum || !selectedShootId) return
+    const barcode = modalBarcode.trim() || `MANUAL-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    doAddNewItem(barcode, styleNum, modalDescription.trim(), true)
+    setModalBarcode('')
+    setModalStyleNumber('')
+    setModalDescription('')
+    setPendingAction(null)
+  }
+
+  function handleModalCancel() {
+    setPendingAction(null)
+    setModalBarcode('')
+    setModalStyleNumber('')
+    setModalDescription('')
   }
 
   function handleUndo(scan: RecentScan) {
@@ -511,7 +552,7 @@ export default function ScanInView() {
       ].join(' ')}>
         <Input
           ref={scanInputRef}
-          scannerMode
+          scannerMode={!pendingAction}
           value={scanInput}
           onChange={e => setScanInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && triggerScan()}
@@ -544,6 +585,15 @@ export default function ScanInView() {
           Clear
         </Button>
       </div>
+
+      <div className="hidden md:flex justify-end">
+        <button
+          onClick={() => openAddItemModal()}
+          className="text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-accent)] transition-colors"
+        >
+          + Add item
+        </button>
+      </div>
     </div>
   )
 
@@ -561,29 +611,7 @@ export default function ScanInView() {
     </div>
   )
 
-  const pendingActions = (
-    <>
-      {pendingAction?.type === 'confirmAdd' && (
-        <Card className="border-[var(--color-danger)] bg-red-50">
-          <p className="text-[var(--text-sm)] font-semibold text-[var(--color-danger)] mb-1">
-            Item not found: <code className="font-mono">{pendingAction.barcode}</code>
-          </p>
-          <p className="text-[var(--text-xs)] text-slate-600 mb-3">
-            Add as a new item to <em>{selectedShoot?.name}</em>?
-          </p>
-          <div className="flex gap-2">
-            <Button variant="danger" size="sm" className="flex-1" onClick={() => {
-              doAddNewItem(pendingAction.barcode)
-              setPendingAction(null)
-            }}>
-              Add to {selectedShoot?.name ?? 'shoot'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setPendingAction(null)}>Cancel</Button>
-          </div>
-        </Card>
-      )}
-    </>
-  )
+  const pendingActions = null
 
   const recentScansList = (maxVisible?: number) => {
     const displayed = maxVisible ? recentScans.slice(0, maxVisible) : recentScans
@@ -873,6 +901,14 @@ export default function ScanInView() {
                   </Button>
                 )}
               </div>
+              <div className="flex justify-start mt-3 pt-3 border-t border-[var(--color-border)]">
+                <button
+                  onClick={() => { setSettingsOpen(false); openAddItemModal() }}
+                  className="text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-accent)] transition-colors touch-target"
+                >
+                  + Add item
+                </button>
+              </div>
             </Card>
           )}
         </div>
@@ -958,6 +994,57 @@ export default function ScanInView() {
 
       {showCamera && (
         <CameraScanner onScan={handleCameraScan} onClose={() => setShowCamera(false)} />
+      )}
+
+      {pendingAction?.type === 'addItem' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <Card padding="lg" className="w-full max-w-sm">
+            <h2 className="text-[var(--text-lg)] font-semibold text-slate-900 mb-4">Add item</h2>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-[var(--text-xs)] font-semibold text-slate-500 block mb-1">Barcode</label>
+                <Input
+                  value={modalBarcode}
+                  onChange={e => setModalBarcode(e.target.value)}
+                  placeholder="Barcode (auto-generated if left blank)"
+                />
+              </div>
+              <div>
+                <label className="text-[var(--text-xs)] font-semibold text-slate-500 block mb-1">
+                  Style number <span className="text-[var(--color-danger)]">*</span>
+                </label>
+                <Input
+                  ref={modalStyleRef}
+                  value={modalStyleNumber}
+                  onChange={e => setModalStyleNumber(e.target.value)}
+                  placeholder="e.g. NK-12345"
+                  onKeyDown={e => e.key === 'Enter' && handleModalSubmit()}
+                />
+              </div>
+              <div>
+                <label className="text-[var(--text-xs)] font-semibold text-slate-500 block mb-1">
+                  Description <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <Input
+                  value={modalDescription}
+                  onChange={e => setModalDescription(e.target.value)}
+                  placeholder="e.g. NIKE JB NSW TCH FLC"
+                  onKeyDown={e => e.key === 'Enter' && handleModalSubmit()}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Button variant="ghost" size="sm" onClick={handleModalCancel}>Cancel</Button>
+              <Button
+                variant="primary" size="sm" className="flex-1"
+                disabled={!modalStyleNumber.trim()}
+                onClick={handleModalSubmit}
+              >
+                Add and Scan In
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   )

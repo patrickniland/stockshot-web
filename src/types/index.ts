@@ -84,6 +84,7 @@ export interface StockItem {
   notes: string
   updatedAt?: string | null
   dropId: string | null
+  manuallyAdded?: boolean
 
   // Legacy — optional during transition, removed in Phase 6
   status?: ItemStatus
