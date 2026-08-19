@@ -657,69 +657,94 @@ export default function ScanInView() {
     setConfirmRemoveId(null)
   }
 
-  const itemTable = (items: StockItem[], emptyMsg = 'No items at this location') => (
-    <div>
-      <div className="flex px-4 py-1.5 bg-slate-50 border-b border-[var(--color-border)] text-[var(--text-xs)] font-semibold text-slate-400 uppercase tracking-wide">
-        <span className="w-7">#</span>
-        <span className="w-32">Style</span>
-        <span className="flex-1">Description</span>
-        <span className="w-14 text-right">Look</span>
-      </div>
-      <div className="overflow-y-auto max-h-[50vh] lg:max-h-none">
-        {items.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[var(--text-sm)] text-slate-400">{emptyMsg}</div>
-        ) : items.map((item, i) => (
-          <div key={item.id}>
-            <div
-              className={`flex items-center px-4 py-2 border-b border-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+  const itemTable = (items: StockItem[], emptyMsg = 'No items at this location') => {
+    // Group by look, matching ShotListView's convention
+    const presentLooks = new Set(items.flatMap(i => i.looks))
+    const orderedLooks = [
+      ...lookOrder,
+      ...[...presentLooks].filter(l => !lookOrder.includes(l)).sort((a, b) => a - b),
+    ].filter(l => presentLooks.has(l))
+
+    const groups: { name: string; look?: number; items: StockItem[] }[] = []
+    orderedLooks.forEach(look => {
+      const gi = items.filter(i => i.looks.includes(look))
+      if (gi.length) groups.push({ name: `Look ${look}`, look, items: gi })
+    })
+    const unassigned = items.filter(i => i.looks.length === 0)
+    if (unassigned.length) groups.push({ name: 'No Look Assigned', items: unassigned })
+
+    const renderRow = (item: StockItem, i: number) => (
+      <div
+        key={item.id}
+        className={`flex items-center px-4 py-2 border-b border-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+      >
+        <span className="w-7 text-[var(--text-xs)] text-slate-300">{i + 1}</span>
+        <span className="w-32 text-[var(--text-sm)] font-semibold text-slate-900 truncate">{item.styleNumber}</span>
+        <span className="flex-1 text-[var(--text-xs)] text-slate-500 truncate">{item.description || '—'}</span>
+        <span className="w-14 text-right text-[var(--text-xs)] text-slate-400">
+          {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
+        </span>
+        <div className="flex gap-1 ml-2 flex-shrink-0">
+          {item.custodyLocation === 'at_client' && (
+            <button
+              onClick={() => resetToPending(item)}
+              title="Reset to pending (undo scan, keep in shoot)"
+              className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-warning)] hover:bg-amber-50 transition-colors"
             >
-              <span className="w-7 text-[var(--text-xs)] text-slate-300">{i + 1}</span>
-              <span className="w-32 text-[var(--text-sm)] font-semibold text-slate-900 truncate">{item.styleNumber}</span>
-              <span className="flex-1 text-[var(--text-xs)] text-slate-500 truncate">{item.description || '—'}</span>
-              <span className="w-14 text-right text-[var(--text-xs)] text-slate-400">
-                {item.looks.length > 0 ? item.looks.map(l => `L${l}`).join(', ') : '—'}
-              </span>
-              <div className="flex gap-1 ml-2 flex-shrink-0">
-                {item.custodyLocation === 'at_client' && (
-                  <button
-                    onClick={() => resetToPending(item)}
-                    title="Reset to pending (undo scan, keep in shoot)"
-                    className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-warning)] hover:bg-amber-50 transition-colors"
-                  >
-                    ↩
-                  </button>
-                )}
-                {confirmRemoveId === item.id ? (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => { removeItemFromShoot(item.id, selectedShootId); setConfirmRemoveId(null) }}
-                      className="px-1.5 py-0.5 rounded text-[var(--text-xs)] bg-[var(--color-danger)] text-white"
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => setConfirmRemoveId(null)}
-                      className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:bg-slate-100"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmRemoveId(item.id)}
-                    title="Remove from shoot"
-                    className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-danger)] hover:bg-red-50 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+              ↩
+            </button>
+          )}
+          {confirmRemoveId === item.id ? (
+            <div className="flex gap-1">
+              <button
+                onClick={() => { removeItemFromShoot(item.id, selectedShootId); setConfirmRemoveId(null) }}
+                className="px-1.5 py-0.5 rounded text-[var(--text-xs)] bg-[var(--color-danger)] text-white"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setConfirmRemoveId(null)}
+                className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:bg-slate-100"
+              >
+                ✕
+              </button>
             </div>
-          </div>
-        ))}
+          ) : (
+            <button
+              onClick={() => setConfirmRemoveId(item.id)}
+              title="Remove from shoot"
+              className="px-1.5 py-0.5 rounded text-[var(--text-xs)] text-slate-400 hover:text-[var(--color-danger)] hover:bg-red-50 transition-colors"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  )
+    )
+
+    return (
+      <div>
+        <div className="flex px-4 py-1.5 bg-slate-50 border-b border-[var(--color-border)] text-[var(--text-xs)] font-semibold text-slate-400 uppercase tracking-wide">
+          <span className="w-7">#</span>
+          <span className="w-32">Style</span>
+          <span className="flex-1">Description</span>
+          <span className="w-14 text-right">Look</span>
+        </div>
+        <div className="overflow-y-auto max-h-[50vh] lg:max-h-none">
+          {items.length === 0 ? (
+            <div className="px-4 py-8 text-center text-[var(--text-sm)] text-slate-400">{emptyMsg}</div>
+          ) : groups.map(group => (
+            <div key={group.look ?? 'unassigned'}>
+              <div className="px-4 py-2 bg-[var(--color-accent)]/10 border-b border-[var(--color-border)] text-[var(--text-xs)] font-bold text-[var(--color-accent)] sticky top-0 z-10">
+                {group.name} — {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+              </div>
+              {group.items.map((item, i) => renderRow(item, i))}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
