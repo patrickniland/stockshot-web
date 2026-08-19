@@ -148,6 +148,19 @@ Per v3 brief: Stock List + Description, Shot List minus Location + wider Descrip
 - Also fixed: `supabase.rpc().catch()` TypeError (PostgrestFilterBuilder is PromiseLike, not a full Promise — must use `.then()`)
 - Also fixed: dnd-kit "changed size between renders" warning — sync gate moved from sensors array length to `onDragStart`/`onDragEnd` handlers
 
+### Scan In reference panel — grouped by Look (`fb185eb`)
+- All three location views (At Studio, At Client, In Transit) in the Scan In reference panel now group items by Look, matching Shot List's convention
+- Respects `lookOrder` drag order; multi-look items appear under each group; "No Look Assigned" at bottom
+- Applies to desktop right panel, iPad portrait panel below scan card, and phone bottom sheet
+
+### Manual item entry on Scan In (`bb463b6`)
+- Scan-not-found on a non-unassigned shoot now opens an "Add item" modal instead of the old inline confirm card
+- Modal fields: Barcode (prefilled from scan, or blank for manual), Style number (required), Description (optional)
+- "+ Add item" text link for no-tag / manual-add (below scan buttons on desktop/iPad; in Settings panel on phone)
+- Auto-generates `MANUAL-XXXXXX` barcode when field is left blank
+- Scanner mode auto-refocus is suspended while modal is open so text fields are typeable
+- Adds `manually_added` boolean to `StockItem` type, `mapItemToDB`, and `mapItemFromDB` — persists `manually_added = true` to DB for all manually created items (DB column already existed)
+
 ### Bug fixes
 - Stock List "Reset to pending" clears looks (`edb04cc`) and persists to DB (`16e04c2`)
 
@@ -270,7 +283,14 @@ Utility classes: `.touch-target` (min 44×44), `.pb-safe` (iPhone home indicator
 ### UX: scan input focus stealing on Scan In
 - Scanner mode's auto-refocus behavior can block clicks into other fields on the same page (e.g. the Look notes input)
 - Users learn to click somewhere neutral first to release scanner focus, then click the target field
-- Not a bug — expected tradeoff of scanner-mode UX — but worth including in operator onboarding
+- The Add Item modal suspends scanner mode entirely while open — this is the correct pattern for any future modal/overlay on Scan In
+- Not a bug for normal usage — expected tradeoff of scanner-mode UX — but worth including in operator onboarding
+
+### Known minor bug: Stock List last-item click unreliable on desktop
+- The last item in the Stock List occasionally requires multiple clicks to expand
+- Suspected cause: scroll container has no bottom padding, so the last row's click target sits right at the container's bottom edge
+- Fix: add `pb-4` to the `flex-1 overflow-y-auto` scroll container in `StockListView.tsx`
+- Deferred — low frequency, low impact
 
 ### Historic: Phase 3 regression — "Item found in a different shoot" false positives
 - Briefly appeared after original Scan In rebuild
@@ -425,4 +445,4 @@ Send the output to Claude and ask for a refreshed doc. Aim for monthly or after 
 
 ---
 
-*This snapshot was verified against the codebase at commit `6920a71` on July 31, 2026. Update timestamp and version when refreshing.*
+*This snapshot was verified against the codebase at commit `bb463b6` on August 19, 2026. Update timestamp and version when refreshing.*
