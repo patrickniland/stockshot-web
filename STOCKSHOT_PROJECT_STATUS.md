@@ -161,6 +161,13 @@ Per v3 brief: Stock List + Description, Shot List minus Location + wider Descrip
 - Scanner mode auto-refocus is suspended while modal is open so text fields are typeable
 - Adds `manually_added` boolean to `StockItem` type, `mapItemToDB`, and `mapItemFromDB` — persists `manually_added = true` to DB for all manually created items (DB column already existed)
 
+### Import column mapping safety — Stage 1 (`a7f860d`, August 2026)
+- Required fields (Style Number, SKU, QR Source) now show blank with red border on load — no silent default pre-selection
+- Clicking Import without explicitly choosing all three shows an inline error and does not call `importFromRows`
+- Import is blocked if any two fields are mapped to the same source column, with a named error message
+- Live warning when a mapped column's header text suggests a different field (e.g. a column headed "SKU" mapped to Style Number) — non-blocking, uses existing warning banner pattern
+- `checkHeaderMismatch()` added to `importCoordinator.ts` with alias lists for Style Number and SKU; no change to `ColumnMapping` type or Supabase persistence
+
 ### Bug fixes
 - Stock List "Reset to pending" clears looks (`edb04cc`) and persists to DB (`16e04c2`)
 
@@ -445,4 +452,4 @@ Send the output to Claude and ask for a refreshed doc. Aim for monthly or after 
 
 ---
 
-*This snapshot was verified against the codebase at commit `bb463b6` on August 19, 2026. Update timestamp and version when refreshing.*
+*This snapshot was verified against the codebase at commit `a7f860d` on August 25, 2026. Update timestamp and version when refreshing.*
