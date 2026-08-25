@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { FolderOpen, FileText, CheckCircle, XCircle, Warning } from '@phosphor-icons/react'
 import { useNavSync } from '../hooks/useNavSync'
 import { v4 as uuidv4 } from 'uuid'
-import { parseFileToRows, previewHeaders, importFromRows } from '../lib/importCoordinator'
+import { parseFileToRows, previewHeaders, importFromRows, checkHeaderMismatch } from '../lib/importCoordinator'
 import { ColumnMapping, defaultColumnMapping } from '../types'
 import useAppStore from '../store/useAppStore'
 import { upsertItems, upsertShootMeta } from '../lib/db'
@@ -28,6 +28,8 @@ export default function ImportView() {
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<'upload' | 'map'>('upload')
   const [dragOver, setDragOver] = useState(false)
+  const [touchedRequired, setTouchedRequired] = useState<Set<string>>(new Set())
+  const [mappingWarnings, setMappingWarnings] = useState<Record<string, string>>({})
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { addShoot, getActiveShoot, addDropToActiveShoot, clients, getClient, savedShoots } = useAppStore()
@@ -40,6 +42,8 @@ export default function ImportView() {
       setHeaders(previewHeaders(parsed))
       setFilename(file.name)
       setDropName(file.name.replace(/\.[^/.]+$/, ''))
+      setTouchedRequired(new Set())
+      setMappingWarnings({})
       setStep('map')
     } catch (e: any) {
       setError(e.message || 'Failed to parse file')
@@ -55,6 +59,36 @@ export default function ImportView() {
 
   function handleImport() {
     setError(null)
+
+    // Fix 1: all three required fields must be explicitly chosen
+    const REQUIRED_LABELS: Record<string, string> = {
+      styleNumberColumn: 'Style Number',
+      skuColumn: 'SKU',
+      qrSourceColumn: 'QR Source',
+    }
+    const untouched = Object.keys(REQUIRED_LABELS).filter(k => !touchedRequired.has(k))
+    if (untouched.length > 0) {
+      setError(`Please choose a column for ${untouched.map(k => REQUIRED_LABELS[k]).join(', ')} before importing.`)
+      return
+    }
+
+    // Fix 2: no two fields may share the same column
+    const mappedCols: Array<{ label: string; col: number }> = [
+      { label: 'Style Number', col: mapping.styleNumberColumn },
+      { label: 'SKU', col: mapping.skuColumn },
+      { label: 'QR Source', col: mapping.qrSourceColumn },
+      ...(mapping.descriptionColumn != null ? [{ label: 'Description', col: mapping.descriptionColumn }] : []),
+      ...(mapping.productTypeColumn != null ? [{ label: 'Product Type', col: mapping.productTypeColumn }] : []),
+    ]
+    for (let i = 0; i < mappedCols.length; i++) {
+      for (let j = i + 1; j < mappedCols.length; j++) {
+        if (mappedCols[i].col === mappedCols[j].col) {
+          setError(`${mappedCols[i].label} and ${mappedCols[j].label} are both mapped to the same column — please map them to different columns.`)
+          return
+        }
+      }
+    }
+
     const client = getClient(selectedClientId || null)
     const dropId = uuidv4()
     const result = importFromRows(rows, mapping, dropId, client)
@@ -113,6 +147,7 @@ export default function ImportView() {
 
     setSuccess(`${result.items.length} items imported successfully!`)
     setStep('upload'); setRows([]); setHeaders([]); setFilename('')
+    setTouchedRequired(new Set()); setMappingWarnings({})
     setTimeout(() => setSuccess(null), 4000)
   }
 
@@ -281,22 +316,54 @@ export default function ImportView() {
               { label: 'QR Source', key: 'qrSourceColumn', nullable: false },
               { label: 'Description', key: 'descriptionColumn', nullable: true },
               { label: 'Product Type', key: 'productTypeColumn', nullable: true },
-            ].map(({ label, key, nullable }) => (
-              <div key={key} className="flex items-center gap-3 mb-2.5">
-                <span className="text-[12px] w-32 text-neutral-600 shrink-0">{label}</span>
-                <select
-                  value={nullable ? ((mapping as any)[key] ?? '') : (mapping as any)[key]}
-                  onChange={e => {
-                    const val = e.target.value === '' ? null : parseInt(e.target.value)
-                    setMapping(m => ({ ...m, [key]: val }))
-                  }}
-                  className="px-2 py-1.5 border border-[var(--color-border)] rounded-[var(--radius-md)] text-[12px] flex-1 bg-white"
-                >
-                  {nullable && <option value="">— not mapped —</option>}
-                  {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
-                </select>
-              </div>
-            ))}
+            ].map(({ label, key, nullable }) => {
+              const isUntouched = !nullable && !touchedRequired.has(key)
+              const displayValue = nullable
+                ? ((mapping as any)[key] ?? '')
+                : (touchedRequired.has(key) ? (mapping as any)[key] : '')
+              return (
+                <div key={key} className="flex items-center gap-3 mb-2.5">
+                  <span className="text-[12px] w-32 text-neutral-600 shrink-0">{label}</span>
+                  <select
+                    value={displayValue}
+                    onChange={e => {
+                      if (nullable) {
+                        const val = e.target.value === '' ? null : parseInt(e.target.value)
+                        setMapping(m => ({ ...m, [key]: val }))
+                      } else if (e.target.value !== '') {
+                        const val = parseInt(e.target.value)
+                        setMapping(m => ({ ...m, [key]: val }))
+                        setTouchedRequired(s => new Set([...s, key]))
+                        // Fix 3: warn if header text suggests a different field
+                        if (key === 'styleNumberColumn' || key === 'skuColumn') {
+                          const header = headers[val] ?? ''
+                          const mismatch = checkHeaderMismatch(header, key)
+                          if (mismatch) {
+                            const fieldLabel = label.replace(/\s\*$/, '')
+                            setMappingWarnings(prev => ({ ...prev, [key]: `Column "${header}" looks like ${mismatch} data but is mapped to ${fieldLabel} — double-check this mapping.` }))
+                            console.log(`[Import] Header mismatch: "${header}" mapped to ${key}, header suggests ${mismatch}`)
+                          } else {
+                            setMappingWarnings(prev => { const next = { ...prev }; delete next[key]; return next })
+                          }
+                        }
+                      } else {
+                        setTouchedRequired(s => { const next = new Set(s); next.delete(key); return next })
+                        setMappingWarnings(prev => { const next = { ...prev }; delete next[key]; return next })
+                      }
+                    }}
+                    className={`px-2 py-1.5 border rounded-[var(--radius-md)] text-[12px] flex-1 bg-white ${
+                      isUntouched
+                        ? 'border-[var(--color-danger)]'
+                        : 'border-[var(--color-border)]'
+                    }`}
+                  >
+                    {!nullable && <option value="">— select column —</option>}
+                    {nullable && <option value="">— not mapped —</option>}
+                    {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
+                  </select>
+                </div>
+              )
+            })}
           </Card>
 
           {/* Preview */}
@@ -328,6 +395,12 @@ export default function ImportView() {
             </Card>
           )}
 
+          {Object.values(mappingWarnings).map((w, i) => (
+            <div key={`mw-${i}`} className="flex items-center gap-2 bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/30 rounded-[var(--radius-md)] px-4 py-2.5 text-[12px] text-[var(--color-warning)]">
+              <Warning size={14} weight="fill" />
+              {w}
+            </div>
+          ))}
           {warnings.map((w, i) => (
             <div key={i} className="flex items-center gap-2 bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/30 rounded-[var(--radius-md)] px-4 py-2.5 text-[12px] text-[var(--color-warning)]">
               <Warning size={14} weight="fill" />
@@ -339,7 +412,7 @@ export default function ImportView() {
             <Button variant="primary" size="md" onClick={handleImport}>
               Import {dataRowCount} items
             </Button>
-            <Button variant="secondary" size="md" onClick={() => { setStep('upload'); setRows([]); setHeaders([]) }}>
+            <Button variant="secondary" size="md" onClick={() => { setStep('upload'); setRows([]); setHeaders([]); setTouchedRequired(new Set()); setMappingWarnings({}) }}>
               Cancel
             </Button>
           </div>

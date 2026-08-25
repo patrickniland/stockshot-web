@@ -45,6 +45,29 @@ async function parseXLSX(file: File): Promise<string[][]> {
   })
 }
 
+// ── Column header mismatch check ─────────────────────────────────────────────
+
+const HEADER_ALIASES: Record<string, string[]> = {
+  styleNumberColumn: ['style', 'style number', 'style#', 'style no', 'stylenum'],
+  skuColumn: ['sku', 'sku#', 'sku number', 'item number', 'product code'],
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  styleNumberColumn: 'Style Number',
+  skuColumn: 'SKU',
+}
+
+export function checkHeaderMismatch(sourceHeader: string, targetKey: string): string | null {
+  const normalized = sourceHeader.toLowerCase().trim().replace(/[^a-z0-9 #]/g, '')
+  for (const [key, aliases] of Object.entries(HEADER_ALIASES)) {
+    if (key === targetKey) continue
+    if (aliases.some(a => a.replace(/[^a-z0-9 #]/g, '') === normalized)) {
+      return FIELD_LABELS[key] ?? key
+    }
+  }
+  return null
+}
+
 // ── Header preview ───────────────────────────────────────────────────────────
 
 export function previewHeaders(rows: string[][]): string[] {
