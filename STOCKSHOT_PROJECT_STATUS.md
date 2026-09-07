@@ -168,6 +168,14 @@ Per v3 brief: Stock List + Description, Shot List minus Location + wider Descrip
 - Live warning when a mapped column's header text suggests a different field (e.g. a column headed "SKU" mapped to Style Number) — non-blocking, uses existing warning banner pattern
 - `checkHeaderMismatch()` added to `importCoordinator.ts` with alias lists for Style Number and SKU; no change to `ColumnMapping` type or Supabase persistence
 
+### Import mapping fix — QR Source duplicate exemption (`ba7ce79`, September 2026)
+- QR Source sharing a column with Style Number is now allowed and produces no warning — this is the normal workflow (the barcode on the tag IS the style number)
+- QR Source sharing a column with SKU shows a non-blocking warning ("SKU is a separate identifier")
+- QR Source mapped to any other column shows a non-blocking warning ("usually duplicates Style Number")
+- Warning recalculates live if Style Number column is changed after QR Source is already set
+- Style Number / SKU / Description / Product Type hard duplicate blocking is unchanged
+- Note: no Supplier Code field exists in the schema; `extraFields` JSONB stores arbitrary extra columns but there is no named Supplier Code mapping
+
 ### Bug fixes
 - Stock List "Reset to pending" clears looks (`edb04cc`) and persists to DB (`16e04c2`)
 
@@ -452,4 +460,4 @@ Send the output to Claude and ask for a refreshed doc. Aim for monthly or after 
 
 ---
 
-*This snapshot was verified against the codebase at commit `a7f860d` on August 25, 2026. Update timestamp and version when refreshing.*
+*This snapshot was verified against the codebase at commit `ba7ce79` on September 7, 2026. Update timestamp and version when refreshing.*
