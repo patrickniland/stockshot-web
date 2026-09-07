@@ -72,11 +72,11 @@ export default function ImportView() {
       return
     }
 
-    // Fix 2: no two fields may share the same column
+    // Fix 2: block genuinely invalid duplicates — QR Source is intentionally excluded
+    // because it normally duplicates Style Number (same barcode value on the tag)
     const mappedCols: Array<{ label: string; col: number }> = [
       { label: 'Style Number', col: mapping.styleNumberColumn },
       { label: 'SKU', col: mapping.skuColumn },
-      { label: 'QR Source', col: mapping.qrSourceColumn },
       ...(mapping.descriptionColumn != null ? [{ label: 'Description', col: mapping.descriptionColumn }] : []),
       ...(mapping.productTypeColumn != null ? [{ label: 'Product Type', col: mapping.productTypeColumn }] : []),
     ]
@@ -344,6 +344,26 @@ export default function ImportView() {
                             console.log(`[Import] Header mismatch: "${header}" mapped to ${key}, header suggests ${mismatch}`)
                           } else {
                             setMappingWarnings(prev => { const next = { ...prev }; delete next[key]; return next })
+                          }
+                        }
+                        // QR Source cross-field warnings
+                        if (key === 'qrSourceColumn') {
+                          if (val === mapping.skuColumn) {
+                            setMappingWarnings(prev => ({ ...prev, qrSourceColumn: 'QR Source is mapped to the same column as SKU — SKU is a separate identifier. Are you sure this is correct?' }))
+                          } else if (val !== mapping.styleNumberColumn) {
+                            setMappingWarnings(prev => ({ ...prev, qrSourceColumn: 'QR Source usually duplicates Style Number — are you sure this column contains barcode/QR values?' }))
+                          } else {
+                            setMappingWarnings(prev => { const next = { ...prev }; delete next['qrSourceColumn']; return next })
+                          }
+                        }
+                        if (key === 'styleNumberColumn' && touchedRequired.has('qrSourceColumn')) {
+                          const qrCol = mapping.qrSourceColumn
+                          if (qrCol === mapping.skuColumn) {
+                            // SKU mismatch warning already shown, leave it
+                          } else if (qrCol !== val) {
+                            setMappingWarnings(prev => ({ ...prev, qrSourceColumn: 'QR Source usually duplicates Style Number — are you sure this column contains barcode/QR values?' }))
+                          } else {
+                            setMappingWarnings(prev => { const next = { ...prev }; delete next['qrSourceColumn']; return next })
                           }
                         }
                       } else {
