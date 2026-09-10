@@ -178,6 +178,7 @@ Per v3 brief: Stock List + Description, Shot List minus Location + wider Descrip
 
 ### Bug fixes
 - Stock List "Reset to pending" clears looks (`edb04cc`) and persists to DB (`16e04c2`)
+- Scan In manual add modal: "Barcode" field relabeled to "QR Code Source" with updated placeholder (`fa9b037`) — aligns with import mapping terminology; field writes to `qr_code_value`
 
 ---
 
@@ -460,4 +461,4 @@ Send the output to Claude and ask for a refreshed doc. Aim for monthly or after 
 
 ---
 
-*This snapshot was verified against the codebase at commit `ba7ce79` on September 7, 2026. Update timestamp and version when refreshing.*
+*This snapshot was verified against the codebase at commit `fa9b037` on September 10, 2026. Update timestamp and version when refreshing.*
