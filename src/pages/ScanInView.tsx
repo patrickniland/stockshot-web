@@ -1002,11 +1002,11 @@ export default function ScanInView() {
             <h2 className="text-[var(--text-lg)] font-semibold text-slate-900 mb-4">Add item</h2>
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-[var(--text-xs)] font-semibold text-slate-500 block mb-1">Barcode</label>
+                <label className="text-[var(--text-xs)] font-semibold text-slate-500 block mb-1">QR Code Source</label>
                 <Input
                   value={modalBarcode}
                   onChange={e => setModalBarcode(e.target.value)}
-                  placeholder="Barcode (auto-generated if left blank)"
+                  placeholder="Style number or supplier code (auto-generated if left blank)"
                 />
               </div>
               <div>
